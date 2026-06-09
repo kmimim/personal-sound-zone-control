@@ -1,0 +1,93 @@
+# スピーカーとマイクの配置座標を計算する関数
+
+function [pos_sp, pos_mic] = pos_sp_mic(num_sp, num_mic, y_center, pltPos)
+    
+    % スピーカーの配置形状を切り替えるフラグ（false: 直線状 / true: 円弧状）
+    isArc = false; 
+
+    %% ---------------------------------------------------------------------
+    %% 制御ゾーンの座標計算
+    %% ---------------------------------------------------------------------
+    itv_x=0.04;
+    itv_y=0.08;
+    d1=0.28;%width
+    d2=0.24;%length
+    dist_zone= 2.0;%distance of centers of bright and dark zones
+    
+    bz_x=-d1/2:itv_x:d1/2;
+    bz_y=y_center-d2/2:itv_y:y_center+d2/2;
+    
+    pos_bz=zeros(num_mic/2,2);
+    pos_dz=zeros(num_mic/2,2);
+    n=0;
+    for x_idx=1:length(bz_x)
+        for y_idx=1:length(bz_y)
+            n=n+1;
+            pos_bz(n,:)=[bz_x(x_idx)-dist_zone/2 bz_y(y_idx)];
+            pos_dz(n,:)=[bz_x(x_idx)+dist_zone/2 bz_y(y_idx)];
+        end
+    end
+    
+    % 前半32点がブライト、後半32点がダークとなるよう1つの行列に結合 [64行 × 2列]
+    pos_mic = [pos_bz; pos_dz];
+
+    %% ---------------------------------------------------------------------
+    %% スピーカーアレイ（音源）の座標計算
+    %% ---------------------------------------------------------------------
+
+    %% 円弧状にスピーカーを配置する場合
+    if isArc
+        itv_ang = pi/40;  % スピーカー間の角度間隔 [rad]（180度/40 = 4.5度間隔）
+        % 各スピーカーの配置角度を、中心（0度）から左右対称になるよう計算
+        ang_sp = itv_ang * ((0.5 - num_sp/2) : (num_sp/2 - 0.5));
+        
+        % 三角関数を使って、円弧上の (x, y) 座標へ変換
+        x_sp = y_center * sin(ang_sp);
+        y_sp = y_center - y_center * cos(ang_sp);
+        pos_sp = [x_sp', y_sp'];
+        
+    %% 直線状にスピーカーを配置する場合（デフォルト）
+    else
+        itv_sp = 0.085;   % スピーカー同士の間隔 [m]（8.5cm間隔）
+        % ※この間隔から計算される空間サンプリング周波数は約2000Hzになります
+        
+        x_sp_1 = -(num_sp-1)/2 * itv_sp;
+        y_sp_1 = 0;       % スピーカーアレイの基準高さ（y=0、つまり床面に設置するイメージ）
+        
+        pos_sp = zeros(num_sp, 2);    % スピーカー座標の格納行列を初期化 [32行 × 2列]
+        pos_sp(1,:) = [x_sp_1, y_sp_1]; % 1台目の座標を代入
+        
+        % 2台目以降のスピーカーの x 座標を等間隔（itv_spずつ足していく）で計算
+        pos_sp(2:end, 1) = x_sp_1 + (1:num_sp-1) * itv_sp;
+        % （y座標は初期化時の0のまま固定）
+    end
+
+    %% ---------------------------------------------------------------------
+    %% 配置図の描画と画像保存
+    %% ---------------------------------------------------------------------
+    if pltPos
+        clf 
+        
+        % スピーカー位置を黒い「▲」でプロット
+        h1 = scatter(pos_sp(:,1), pos_sp(:,2), 'k', '^', 'filled'); hold on;
+        % 制御点をサイズ10の「●」でプロット（デフォルト色）
+        h2 = scatter(pos_mic(:,1), pos_mic(:,2), 10, 'filled');
+        
+        daspect([1 1 1])    % グラフの縦横比（アスペクト比）を 1:1 に固定（空間の歪みをなくす）
+        xlim([-1.5,1.5 ])   % x軸の表示範囲を -1.5m 〜 1.5m に設定
+        ylim([0, 2])        % y軸の表示範囲を 0m 〜 2m に設定
+        grid on;            % グリッド線を表示
+        
+        xlabel("x[m]"); ylabel("y[m]"); % 軸ラベルの設定
+        legend({"sp", "mic"});           % 凡例の表示（sp = スピーカー, mic = マイク）
+        
+        % 設定条件を自動的に組み込んだ保存用ファイル名を作成
+        filename = sprintf("plc_sp_%d_mic_%d_zone-h_%.2fm_zone-dis_%.2fm.png", ...
+                           num_sp, num_mic, y_center, dist_zone);
+        % グラフのタイトルを設定
+        title(sprintf("sp=%d, mic=%d, height=%.2f, dis=%.2f", num_sp, num_mic, y_center, dist_zone));
+        
+        set(gca, 'fontsize', 15)       % 文字サイズを大きくして見やすくする
+        saveas(gcf, filename, 'png');  % 描画したグラフをPNG画像として保存
+    end
+end

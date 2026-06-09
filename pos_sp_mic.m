@@ -1,35 +1,49 @@
 # スピーカーとマイクの配置座標を計算する関数
+function [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1, d2, pltPos)
 
-function [pos_sp, pos_mic] = pos_sp_mic(num_sp, num_mic, y_center, pltPos)
-    
     % スピーカーの配置形状を切り替えるフラグ（false: 直線状 / true: 円弧状）
     isArc = false; 
 
     %% ---------------------------------------------------------------------
     %% 制御ゾーンの座標計算
     %% ---------------------------------------------------------------------
-    itv_x=0.04;
-    itv_y=0.08;
-    d1=0.28;%width
-    d2=0.24;%length
-    dist_zone= 2.0;%distance of centers of bright and dark zones
-    
-    bz_x=-d1/2:itv_x:d1/2;
-    bz_y=y_center-d2/2:itv_y:y_center+d2/2;
-    
-    pos_bz=zeros(num_mic/2,2);
-    pos_dz=zeros(num_mic/2,2);
-    n=0;
-    for x_idx=1:length(bz_x)
-        for y_idx=1:length(bz_y)
-            n=n+1;
-            pos_bz(n,:)=[bz_x(x_idx)-dist_zone/2 bz_y(y_idx)];
-            pos_dz(n,:)=[bz_x(x_idx)+dist_zone/2 bz_y(y_idx)];
+    % main.m から渡された点数と範囲を基に、正確な格子座標の配列を生成
+    bz_x = linspace(-d1/2, d1/2, n_x);
+    bz_y = linspace(-d2/2, d2/2, n_y);
+
+    % -----------------------
+    % シフト後の中心
+    % -----------------------
+    bz_center = [-1.0, y_center];
+    dz_center = [ 1.0, y_center];
+    dist_zone = dz_center(1) - bz_center(1); % BZとDZの中心間距離（2.0m）
+
+    % -----------------------
+    % 点格納
+    % -----------------------
+    pos_bz = zeros(n_x*n_y,2);
+    pos_dz = zeros(n_x*n_y,2);
+
+    n = 0;
+    for x_idx = 1:length(bz_x)
+        for y_idx = 1:length(bz_y)
+            n = n + 1;
+
+            % BZ（左）
+            pos_bz(n,:) = [bz_x(x_idx) + bz_center(1), ...
+                        bz_y(y_idx) + bz_center(2)];
+
+            % DZ（右）
+            pos_dz(n,:) = [bz_x(x_idx) + dz_center(1), ...
+                        bz_y(y_idx) + dz_center(2)];
         end
     end
     
     % 前半32点がブライト、後半32点がダークとなるよう1つの行列に結合 [64行 × 2列]
     pos_mic = [pos_bz; pos_dz];
+    % 実際に生成された総点数を main.m 側へ返す
+    num_mic = size(pos_mic, 1);
+
 
     %% ---------------------------------------------------------------------
     %% スピーカーアレイ（音源）の座標計算

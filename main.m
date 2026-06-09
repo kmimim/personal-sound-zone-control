@@ -18,14 +18,21 @@ mthd_ctrl = "pm"; % 音場制御の手法 = PM法
 %% -------------------------------------------------------------------------
 %% スピーカーとマイクの配置
 %% -------------------------------------------------------------------------
-num_sp = 32;      % 使用するスピーカー数
-num_mic = 64;     % 使用する制御点の総数
-zone_h = 0.6;     % スピーカーアレイから、制御ゾーンの中心までの垂直距離 [m]
 
-% 外部関数 pos_sp_mic.m を呼び出し、スピーカーとマイクの座標を取得
-% pos_sp  : スピーカーの座標行列 [32行 × 2列 (x, y)]
-% pos_mic : マイクの座標行列 [64行 × 2列 (x, y)]
-[pos_sp, pos_mic] = pos_sp_mic(num_sp, num_mic, zone_h, pltPos);
+num_sp = 32;      % 使用するスピーカー数
+y_center = 1.0; % 制御ゾーンの中心のy座標（スピーカーアレイからの高さ）
+% --- ユーザー指定の範囲と間隔 ---
+d1 = 1.0;         % width (x方向の幅)
+d2 = 2.0;         % length (y方向の幅)
+itv_x = 0.04;     % x方向の制御点間隔 [m] (4cm)
+itv_y = 0.08;     % y方向の制御点間隔 [m] (8cm)
+
+% 間隔から格子点数を自動計算 (端点を含むため +1 し、浮動小数の誤差を round で丸める)
+n_x = round(d1 / itv_x) + 1; 
+n_y = round(d2 / itv_y) + 1; 
+
+% 外部関数 pos_sp_mic.m を呼び出し、座標と「実際に生成された総マイク数(num_mic)」を取得
+[pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1, d2, pltPos);
 
 %% -------------------------------------------------------------------------
 %% 自由空間の伝達関数計算 
@@ -66,7 +73,7 @@ SPL_ctrl = 10 * log10(abs(p_ctrl).^2);
 %% -------------------------------------------------------------------------
 % 保存する画像ファイル名の生成
 map_name = sprintf("SPL_sp%d_mic%d_%dHz_center_%.2fm_AC=%.2f_%s.png", ...
-                   num_sp, num_mic, freq, zone_h, round(AC_freq), mthd_ctrl);
+                   num_sp, num_mic, freq, y_center, round(AC_freq), mthd_ctrl);
 
 % 外部スクリプト spl_distribution.m を実行し、部屋全体の音圧分布をプロット・画像保存
 run spl_distribution.m

@@ -4,8 +4,8 @@
 %% 1. 空間全体の計算用格子点の作成
 %% -------------------------------------------------------------------------
 % 部屋の空間を2cm間隔の細かい網の目状に分割します
-x=-1.5:0.02:1.5;     % x軸方向の範囲：-1.5m から +1.5m まで（2cm刻み）
-y = 0.02 : 0.02 : 2;    % y軸方向の範囲：0.02m から 2m まで（2cm刻み）
+x = room_size(1) : itv_room : room_size(2);
+y = room_size(3) : itv_room : room_size(4);
 
 % meshgrid関数により、2次元の格子点座標（行列）を生成
 [X, Y] = meshgrid(x, y);
@@ -59,18 +59,38 @@ con_dz(5,:) = con_dz(1,:);                          % 左下（枠を閉じる�
 %% -------------------------------------------------------------------------
 figure % 新しいグラフウィンドウを開く
 
-% 空間全体の音圧（p_t_dB）を、色付きの点（カラーマップ）としてプロット
-h1 = scatter(pos_target(:,1), pos_target(:,2), [], p_t_dB, 'filled'); hold on;
+% ② 黒 -> 紫 -> 赤 -> 黄 となるカスタムカラーマップの作成
+c_black  = [0, 0, 0];
+c_purple = [0.5, 0, 0.5];
+c_red    = [1, 0, 0];
+c_yellow = [1, 1, 0];
 
-% スピーカーの配置位置（y=0の直線上）に、少し大きめ（サイズ50）の黒い丸「●」を重ねてプロット
+n_c = 256;
+c1 = round(n_c / 3);
+c2 = round(n_c * 2 / 3);
+custom_cmap = zeros(n_c, 3);
+
+custom_cmap(1:c1, 1) = linspace(c_black(1), c_purple(1), c1);
+custom_cmap(1:c1, 2) = linspace(c_black(2), c_purple(2), c1);
+custom_cmap(1:c1, 3) = linspace(c_black(3), c_purple(3), c1);
+
+custom_cmap(c1+1:c2, 1) = linspace(c_purple(1), c_red(1), c2-c1);
+custom_cmap(c1+1:c2, 2) = linspace(c_purple(2), c_red(2), c2-c1);
+custom_cmap(c1+1:c2, 3) = linspace(c_purple(3), c_red(3), c2-c1);
+
+custom_cmap(c2+1:end, 1) = linspace(c_red(1), c_yellow(1), n_c-c2);
+custom_cmap(c2+1:end, 2) = linspace(c_red(2), c_yellow(2), n_c-c2);
+custom_cmap(c2+1:end, 3) = linspace(c_red(3), c_yellow(3), n_c-c2);
+
+% カラーマップの適用
+colormap(custom_cmap);
+
+h1 = scatter(pos_target(:,1), pos_target(:,2), [], p_t_dB, 'filled'); hold on;
 h2 = scatter(pos_sp(:,1), pos_sp(:,2), 50, 'k', 'filled'); hold on;
 
-% ブライトゾーン（音を大きくしたい領域）を「赤の太い破線（r--）」で囲む
-h4 = plot(con_bz(:,1), con_bz(:,2), 'r--', 'LineWidth', 1.5); hold on;
-
-% ダークゾーン（音を消したい領域）を「白の太い破線（w--）」で囲む
-h5 = plot(con_dz(:,1), con_dz(:,2), 'w--', 'LineWidth', 1.5); hold off;
-
+% ③ エリアの点線を見やすい色（シアンと白）、細い破線（LineWidth: 0.8）に変更
+h4 = plot(con_bz(:,1), con_bz(:,2), 'c--', 'LineWidth', 0.8); hold on;
+h5 = plot(con_dz(:,1), con_dz(:,2), 'w--', 'LineWidth', 0.8); hold off;
 % グラフの装飾設定
 xlabel("x[m]"); ylabel("y[m]"); % 軸のラベル
 colorbar                        % 画面右側に音圧の大きさと色の対応を示すカラーバーを表示

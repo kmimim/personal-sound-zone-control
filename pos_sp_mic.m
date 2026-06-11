@@ -78,11 +78,10 @@ function [pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, y_center, dist_
     if pltPos
         figure % 新しいグラフウィンドウを開く
         
-        % スピーカー位置を黒い「▲」でプロット
-        h1 = scatter(pos_sp(:,1), pos_sp(:,2), 'k', '^', 'filled'); hold on;
-        % 制御点をサイズ10の「●」でプロット（デフォルト色）
+        % スピーカーとマイクの配置を散布図で描画
+        h1 = scatter(pos_sp(:,1), pos_sp(:,2), 50, 'k', '^', 'filled'); hold on;
         h2 = scatter(pos_mic(:,1), pos_mic(:,2), 10, 'filled');
-        
+
         daspect([1 1 1])    % グラフの縦横比（アスペクト比）を 1:1 に固定（空間の歪みをなくす）
         xlim([room_size(1), room_size(2)])   % x軸の表示範囲
         ylim([room_size(3), room_size(4)])        % y軸の表示範囲

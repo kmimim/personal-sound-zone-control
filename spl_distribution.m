@@ -86,7 +86,7 @@ custom_cmap(c2+1:end, 3) = linspace(c_red(3), c_yellow(3), n_c-c2);
 colormap(custom_cmap);
 
 h1 = scatter(pos_target(:,1), pos_target(:,2), [], p_t_dB, 'filled'); hold on;
-h2 = scatter(pos_sp(:,1), pos_sp(:,2), 50, 'k', 'filled'); hold on;
+h2 = scatter(pos_sp(:,1), pos_sp(:,2), 10, 'k', 'LineWidth', 0.2); hold on;
 
 % ③ エリアの点線を見やすい色（シアンと白）、細い破線（LineWidth: 0.8）に変更
 h4 = plot(con_bz(:,1), con_bz(:,2), 'c--', 'LineWidth', 0.8); hold on;

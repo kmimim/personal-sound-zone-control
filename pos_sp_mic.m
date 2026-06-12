@@ -1,6 +1,6 @@
 # スピーカーとマイクの配置座標を計算する関数
 
-function [pos_sp, pos_mic] = pos_sp_mic(num_sp, num_mic, y_center, pltPos)
+function [pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, y_center, dist_zone, bz_size, dz_size, itv_mic, room_size, pltPos)
     
     % スピーカーの配置形状を切り替えるフラグ（false: 直線状 / true: 円弧状）
     isArc = false; 
@@ -8,28 +8,38 @@ function [pos_sp, pos_mic] = pos_sp_mic(num_sp, num_mic, y_center, pltPos)
     %% ---------------------------------------------------------------------
     %% 制御ゾーンの座標計算
     %% ---------------------------------------------------------------------
-    itv_x=0.04;
-    itv_y=0.08;
-    d1=0.28;%width
-    d2=0.24;%length
-    dist_zone= 2.0;%distance of centers of bright and dark zones
+
+    % ブライトゾーンの計算
+    bz_x = -bz_size(1)/2 : itv_mic(1) : bz_size(1)/2;
+    bz_y = y_center - bz_size(2)/2 : itv_mic(2) : y_center + bz_size(2)/2;
     
-    bz_x=-d1/2:itv_x:d1/2;
-    bz_y=y_center-d2/2:itv_y:y_center+d2/2;
-    
-    pos_bz=zeros(num_mic/2,2);
-    pos_dz=zeros(num_mic/2,2);
+    pos_bz = zeros(length(bz_x) * length(bz_y), 2);
+
     n=0;
-    for x_idx=1:length(bz_x)
-        for y_idx=1:length(bz_y)
-            n=n+1;
-            pos_bz(n,:)=[bz_x(x_idx)-dist_zone/2 bz_y(y_idx)];
-            pos_dz(n,:)=[bz_x(x_idx)+dist_zone/2 bz_y(y_idx)];
+    for x_idx = 1:length(bz_x)
+        for y_idx = 1:length(bz_y)
+            n = n + 1;
+            pos_bz(n,:) = [bz_x(x_idx) - dist_zone/2, bz_y(y_idx)];
+        end
+    end
+    num_bz = n; % BZのマイク数を保存
+    
+    % ダークゾーンの計算
+    dz_x = -dz_size(1)/2 : itv_mic(1) : dz_size(1)/2;
+    dz_y = y_center - dz_size(2)/2 : itv_mic(2) : y_center + dz_size(2)/2;
+    
+    pos_dz = zeros(length(dz_x) * length(dz_y), 2);
+    n = 0;
+    for x_idx = 1:length(dz_x)
+        for y_idx = 1:length(dz_y)
+            n = n + 1;
+            pos_dz(n,:) = [dz_x(x_idx) + dist_zone/2, dz_y(y_idx)];
         end
     end
     
-    % 前半32点がブライト、後半32点がダークとなるよう1つの行列に結合 [64行 × 2列]
+    % BZとDZを結合し、総マイク数を算出
     pos_mic = [pos_bz; pos_dz];
+    num_mic = size(pos_mic, 1);
 
     %% ---------------------------------------------------------------------
     %% スピーカーアレイ（音源）の座標計算
@@ -66,16 +76,15 @@ function [pos_sp, pos_mic] = pos_sp_mic(num_sp, num_mic, y_center, pltPos)
     %% 配置図の描画と画像保存
     %% ---------------------------------------------------------------------
     if pltPos
-        clf 
+        figure % 新しいグラフウィンドウを開く
         
-        % スピーカー位置を黒い「▲」でプロット
-        h1 = scatter(pos_sp(:,1), pos_sp(:,2), 'k', '^', 'filled'); hold on;
-        % 制御点をサイズ10の「●」でプロット（デフォルト色）
+        % スピーカーとマイクの配置を散布図で描画
+        h1 = scatter(pos_sp(:,1), pos_sp(:,2), 50, 'k', '^', 'filled'); hold on;
         h2 = scatter(pos_mic(:,1), pos_mic(:,2), 10, 'filled');
-        
+
         daspect([1 1 1])    % グラフの縦横比（アスペクト比）を 1:1 に固定（空間の歪みをなくす）
-        xlim([-1.5,1.5 ])   % x軸の表示範囲を -1.5m 〜 1.5m に設定
-        ylim([0, 2])        % y軸の表示範囲を 0m 〜 2m に設定
+        xlim([room_size(1), room_size(2)])   % x軸の表示範囲
+        ylim([room_size(3), room_size(4)])        % y軸の表示範囲
         grid on;            % グリッド線を表示
         
         xlabel("x[m]"); ylabel("y[m]"); % 軸ラベルの設定

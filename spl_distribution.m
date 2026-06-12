@@ -60,10 +60,10 @@ con_dz(5,:) = con_dz(1,:);                          % 左下（枠を閉じる�
 figure % 新しいグラフウィンドウを開く
 
 % ② 黒 -> 紫 -> 赤 -> 黄 となるカスタムカラーマップの作成
-c_black  = [0, 0, 0];
-c_purple = [0.5, 0, 0.5];
-c_red    = [1, 0, 0];
-c_yellow = [1, 1, 0];
+c_black  = [0.05 0.05 0.05];
+c_purple = [0.35 0.00 0.55];
+c_red    = [0.90 0.15 0.15];
+c_yellow = [1.00 0.95 0.20];
 
 n_c = 256;
 c1 = round(n_c / 3);
@@ -85,7 +85,13 @@ custom_cmap(c2+1:end, 3) = linspace(c_red(3), c_yellow(3), n_c-c2);
 % カラーマップの適用
 colormap(custom_cmap);
 
-h1 = scatter(pos_target(:,1), pos_target(:,2), [], p_t_dB, 'filled'); hold on;
+% 1次元の音圧ベクトルを、2次元の格子サイズ（画像形状）に変形
+P_matrix = reshape(p_t_dB, size(X)); 
+
+% imagesc を使って音圧分布を画像としてプロット（これで枠線でスパッと切れます）
+h1 = imagesc(x, y, P_matrix); hold on;
+axis xy; % imagesc特有の上下反転を直し、座標の向きを正常化する
+
 h2 = scatter(pos_sp(:,1), pos_sp(:,2), 10, 'k', 'LineWidth', 0.2); hold on;
 
 % ③ エリアの点線を見やすい色（シアンと白）、細い破線（LineWidth: 0.8）に変更
@@ -96,7 +102,18 @@ xlabel("x[m]"); ylabel("y[m]"); % 軸のラベル
 colorbar                        % 画面右側に音圧の大きさと色の対応を示すカラーバーを表示
 % clim([-60 0])                 % （コメントアウト：カラーバーの最小値・最大値を固定したい場合に使用）
 daspect([1 1 1])                % 空間の縦横比（アスペクト比）を 1:1 に固定
+
+% 表示範囲ををピクセルの「端」ぴったりに合わせる
+xlim([room_size(1), room_size(2)])
+ylim([room_size(3), room_size(4)])
 grid on;                        % 背景に格子線を表示
+
+% 枠線を四方すべてに閉じ、最前面に持ってくる
+box on;                         % 上と右にも黒い枠線を描画して閉じ込める
+set(gca, 'Layer', 'top');       % 枠線とグリッド線をカラーマップの「上」に重ねる
+
+% 画面で見えている通りのサイズ・余白のまま保存する設定
+set(gcf, 'PaperPositionMode', 'auto'); 
 
 % main.m であらかじめ生成されたファイル名（map_name）で、描画したグラフをPNG画像として保存
 saveas(gcf, map_name, 'png');

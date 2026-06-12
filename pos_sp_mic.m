@@ -79,7 +79,7 @@ function [pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, y_center, dist_
         figure % 新しいグラフウィンドウを開く
         
         % スピーカーとマイクの配置を散布図で描画
-        h1 = scatter(pos_sp(:,1), pos_sp(:,2), 50, 'k', '^', 'filled'); hold on;
+        h1 = scatter(pos_sp(:,1), pos_sp(:,2), 15, 'k', '^', 'filled'); hold on;
         h2 = scatter(pos_mic(:,1), pos_mic(:,2), 10, 'filled');
 
         daspect([1 1 1])    % グラフの縦横比（アスペクト比）を 1:1 に固定（空間の歪みをなくす）

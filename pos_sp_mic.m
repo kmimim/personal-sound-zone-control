@@ -1,6 +1,7 @@
 # スピーカーとマイクの配置座標を計算する関数
-function [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1, d2, pltPos)
 
+function [pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, y_center, dist_zone, bz_size, dz_size, itv_mic, room_size, pltPos)
+    
     % スピーカーの配置形状を切り替えるフラグ（false: 直線状 / true: 円弧状）
     isArc = false; 
 
@@ -39,11 +40,10 @@ function [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1,
         end
     end
     
-    % 前半32点がブライト、後半32点がダークとなるよう1つの行列に結合 [64行 × 2列]
+    % BZとDZを結合し、総マイク数を算出
     pos_mic = [pos_bz; pos_dz];
     % 実際に生成された総点数を main.m 側へ返す
     num_mic = size(pos_mic, 1);
-
 
     %% ---------------------------------------------------------------------
     %% スピーカーアレイ（音源）の座標計算
@@ -80,16 +80,15 @@ function [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1,
     %% 配置図の描画と画像保存
     %% ---------------------------------------------------------------------
     if pltPos
-        clf 
+        figure % 新しいグラフウィンドウを開く
         
-        % スピーカー位置を黒い「▲」でプロット
-        h1 = scatter(pos_sp(:,1), pos_sp(:,2), 'k', '^', 'filled'); hold on;
-        % 制御点をサイズ10の「●」でプロット（デフォルト色）
+        % スピーカーとマイクの配置を散布図で描画
+        h1 = scatter(pos_sp(:,1), pos_sp(:,2), 15, 'k', '^', 'filled'); hold on;
         h2 = scatter(pos_mic(:,1), pos_mic(:,2), 10, 'filled');
-        
+
         daspect([1 1 1])    % グラフの縦横比（アスペクト比）を 1:1 に固定（空間の歪みをなくす）
-        xlim([-1.5,1.5 ])   % x軸の表示範囲を -1.5m 〜 1.5m に設定
-        ylim([0, 2])        % y軸の表示範囲を 0m 〜 2m に設定
+        xlim([room_size(1), room_size(2)])   % x軸の表示範囲
+        ylim([room_size(3), room_size(4)])        % y軸の表示範囲
         grid on;            % グリッド線を表示
         
         xlabel("x[m]"); ylabel("y[m]"); % 軸ラベルの設定

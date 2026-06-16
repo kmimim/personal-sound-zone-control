@@ -1,4 +1,4 @@
-function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c)
+function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c ,num_bz)
 
     % Gのサイズ取得
     % n_mic : 制御点(マイク)数
@@ -42,15 +42,15 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c)
 
         p_des_bz = amp_src .* exp( ...
             1i * (2*pi*f(kk)/c) * ...
-            (mic_geo(1:n_mic/2,1)*cos(ang_wave) + ...
-             mic_geo(1:n_mic/2,2)*sin(ang_wave)));
+            (mic_geo(1:num_bz,1)*cos(ang_wave) + ...
+             mic_geo(1:num_bz,2)*sin(ang_wave)));
 
         %--------------------------------------------------
         % Dark Zone の目標音圧
         %
         % 音を聞こえなくしたいので0
         %--------------------------------------------------
-        p_des_dz = zeros(n_mic/2, Nsrc);
+        p_des_dz = zeros(n_mic - num_bz, Nsrc);
 
         %--------------------------------------------------
         % 全制御点の目標音圧ベクトル

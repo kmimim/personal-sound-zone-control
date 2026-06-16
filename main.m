@@ -25,15 +25,15 @@ itv_room = 0.02;          % 空間全体の計算用格子点の間隔 [m]
 %% スピーカーとマイクの配置
 num_sp = 32;      % 使用するスピーカー数
 % 制御ゾーン（Bz, Dz）の設定
-zone_h = 0.6;             % 制御ゾーンの中心高さ(y座標) [m]
+zone_h = 1.0;             % 制御ゾーンの中心高さ(y座標) [m]
 dist_zone = 2.0;          % BzとDzの中心間距離 [m]
-bz_size = [0.28, 0.24];   % Bzの大きさ [幅(x), 奥行き(y)] [m]
-dz_size = [0.28, 0.24];   % Dzの大きさ [幅(x), 奥行き(y)] [m]
+bz_size = [1.0, 2.0];   % Bzの大きさ [幅(x), 奥行き(y)] [m]
+dz_size = [1.0, 2.0];   % Dzの大きさ [幅(x), 奥行き(y)] [m]
 
 % 制御点（マイク）の配置間隔 [x方向, y方向]
 itv_mic = [0.04, 0.08];
 
-[pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, zone_h,dist_zone, bz_size, dz_size, itv_mic, room_size, pltPos);
+[pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, zone_h, dist_zone, bz_size, dz_size, itv_mic, room_size, pltPos);
 
 %% -------------------------------------------------------------------------
 %% 自由空間の伝達関数計算
@@ -46,7 +46,7 @@ G_ctrl = IR_freefield(pos_mic, pos_sp, k);
 %% フィルターの算出と音場制御
 %% -------------------------------------------------------------------------
 % 外部関数 filter_pm.m を呼び出し、PM法に基づいてスピーカーの駆動重みを計算
-drv = filter_pm(pos_mic, G_ctrl, freq, ang_wave, amp_src, Nsrc, c,num_bz);
+drv = filter_pm(pos_mic, G_ctrl, freq, ang_wave, amp_src, Nsrc, c, num_bz);
 
 %% -------------------------------------------------------------------------
 %% 制御結果の評価
@@ -55,7 +55,6 @@ drv = filter_pm(pos_mic, G_ctrl, freq, ang_wave, amp_src, Nsrc, c,num_bz);
 p_ctrl = G_ctrl * drv;
 
 % マイク群を「Bz」と「Dz」に半分ずつ分割
-num_bz = num_mic / 2;          % BZのマイク数（32点）
 p_bz = p_ctrl(1:num_bz);       % 前半：BZの音圧
 p_dz = p_ctrl(num_bz+1:end);   % 後半：Dzの音圧
 
@@ -71,10 +70,13 @@ SPL_ctrl = 10 * log10(abs(p_ctrl).^2);
 %% 空間全体の音圧分布図の作成と結果表示
 %% -------------------------------------------------------------------------
 % 保存する画像ファイル名の生成
+% y_center を zone_h に変更
 map_name = sprintf("SPL_sp%d_mic%d_%dHz_center_%.2fm_AC=%.2f_%s.png", ...
-                   num_sp, num_mic, freq, y_center, round(AC_freq), mthd_ctrl);
+                   num_sp, num_mic, freq, zone_h, round(AC_freq), mthd_ctrl);
 
 % 外部スクリプト spl_distribution.m を実行し、部屋全体の音圧分布をプロット・画像保存
+% y_center を zone_h としてスコープに追加
+y_center = zone_h;
 run spl_distribution.m
 
 % コマンドウィンドウに結果（周波数、スピーカー数、マイク数、ACの計算値）をテキスト表示

@@ -8,6 +8,12 @@ function [pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, y_center, dist_
     %% ---------------------------------------------------------------------
     %% 制御ゾーンの座標計算
     %% ---------------------------------------------------------------------
+    % bz_size と itv_mic から格子点の数と幅を計算
+    n_x = round(bz_size(1) / itv_mic(1)) + 1;  % x方向の点数
+    n_y = round(bz_size(2) / itv_mic(2)) + 1;  % y方向の点数
+    d1 = bz_size(1);  % BZのx方向の幅
+    d2 = bz_size(2);  % BZのy方向の幅
+
     % main.m から渡された点数と範囲を基に、正確な格子座標の配列を生成
     bz_x = linspace(-d1/2, d1/2, n_x);
     bz_y = linspace(-d2/2, d2/2, n_y);
@@ -17,7 +23,7 @@ function [pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, y_center, dist_
     % -----------------------
     bz_center = [-1.0, y_center];
     dz_center = [ 1.0, y_center];
-    dist_zone = dz_center(1) - bz_center(1); % BZとDZの中心間距離（2.0m）
+    % dist_zone = dz_center(1) - bz_center(1); % BZとDZの中心間距離（2.0m）
 
     % -----------------------
     % 点格納
@@ -44,6 +50,7 @@ function [pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, y_center, dist_
     pos_mic = [pos_bz; pos_dz];
     % 実際に生成された総点数を main.m 側へ返す
     num_mic = size(pos_mic, 1);
+    num_bz = size(pos_bz, 1);  % BZのマイク数を返す
 
     %% ---------------------------------------------------------------------
     %% スピーカーアレイ（音源）の座標計算

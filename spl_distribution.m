@@ -105,11 +105,18 @@ daspect([1 1 1])                % 空間の縦横比（アスペクト比）を 
 % 表示範囲ををピクセルの「端」ぴったりに合わせる
 xlim([room_size(1), room_size(2)])
 ylim([room_size(3), room_size(4)])
+
 grid on;                        % 背景に格子線を表示
 ax = gca;                       % 現在の軸の設定を取得
-ax.GridColor = [1, 1, 1];       % グリッドの色を「白」に設定（グレーにしたい場合は [0.6, 0.6, 0.6]）
-ax.GridAlpha = 0.35;            % グリッドの透明度を 0.35 (35%) に設定して主張を控えめに
-ax.GridLineStyle = ':';         % グリッド線を細かい「点線」にしてさらに上品に見せる
+
+% Octaveでもエラーが出ないように set 関数に書き換え
+try
+    set(ax, 'GridColor', [1, 1, 1]);
+    set(ax, 'GridAlpha', 0.35);
+    set(ax, 'GridLineStyle', ':');
+catch
+    % 万が一、古いOctaveでプロパティ自体が存在しない場合はスキップ
+end
 
 % 枠線を四方すべてに閉じ、最前面に持ってくる
 box on;                         % 上と右にも黒い枠線を描画して閉じ込める

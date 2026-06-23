@@ -79,3 +79,5 @@ run spl_distribution.m
 
 % コマンドウィンドウに結果（周波数、スピーカー数、マイク数、ACの計算値）をテキスト表示
 fprintf("f=%dHz, num_sp=%d, num_mic=%d, AC=%.3fdB\n", freq, num_sp, num_mic, AC_freq);
+
+run plot_spl_profile.m

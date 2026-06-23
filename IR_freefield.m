@@ -1,4 +1,4 @@
-# 伝達関数計算関数 G
+% 伝達関数計算関数 G
 
 function G = IR_freefield(mic_geo, sp_geo, k)
     % 入力引数:

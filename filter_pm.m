@@ -3,10 +3,16 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c ,num_bz)
     % Gのサイズ取得
     % n_mic : 制御点(マイク)数
     % n_sp  : スピーカ数
-    [n_mic, n_sp] = size(G,1:2);
+    s = size(G);
+    n_mic = s(1);
+    n_sp  = s(2);
 
-    % 周波数ビン数
-    f_len = length(f);
+    % 周波数ビン数（G の 3 次元目に依存）
+    if numel(s) >= 3
+        f_len = s(3);
+    else
+        f_len = 1;
+    end
 
     % 出力用行列
     % 行：スピーカ
@@ -26,7 +32,8 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c ,num_bz)
         % 最大固有値の10^-5倍
         % 行列が悪条件になるのを防ぐ
         %--------------------------------------------------
-        reg_para = 10^(-5) * eigs((g' * g), 1);
+        % 正則化パラメータ：最大固有値の 1e-5 倍（小行列なので eig を利用）
+        reg_para = 1e-5 * max(eig(g' * g));
 
         % 固定値を使う場合
         % reg_para = 0.001;
@@ -69,8 +76,8 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c ,num_bz)
         % d : スピーカ駆動信号
         % λ : 正則化パラメータ
         %--------------------------------------------------
-        drv_single = inv(g' * g + reg_para * eye(n_sp)) ...
-                     * g' * p_des;
+        % 正則化付き最小二乗を直接解く（逆行列を使わずに左除算を使う）
+        drv_single = (g' * g + reg_para * eye(n_sp)) \ (g' * p_des);
 
         % 周波数ごとの結果を保存
         drv_ls(:,kk) = drv_single;

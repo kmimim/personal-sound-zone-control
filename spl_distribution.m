@@ -1,4 +1,4 @@
-# 音圧分布図生成
+% 音圧分布図生成
 
 %% -------------------------------------------------------------------------
 %% 1. 空間全体の計算用格子点の作成
@@ -92,7 +92,8 @@ P_matrix = reshape(p_t_dB, size(X));
 h1 = imagesc(x, y, P_matrix); hold on;
 axis xy; % imagesc特有の上下反転を直し、座標の向きを正常化する
 
-h2 = scatter(pos_sp(:,1), pos_sp(:,2), 15, 'k', '^', 'filled'); hold on;
+% スピーカー位置を黒い三角でプロット（scatter の引数互換性を避ける）
+h2 = plot(pos_sp(:,1), pos_sp(:,2), '^k', 'MarkerFaceColor', 'k'); hold on;
 % ③ エリアの点線を見やすい色（シアンと白）、細い破線（LineWidth: 0.8）に変更
 h4 = plot(con_bz(:,1), con_bz(:,2), 'c--', 'LineWidth', 0.8); hold on;
 h5 = plot(con_dz(:,1), con_dz(:,2), 'w--', 'LineWidth', 0.8); hold off;

@@ -23,7 +23,6 @@ room_size = [-1.5, 1.5, 0, 2.0];
 itv_room = 0.02;          % 空間全体の計算用格子点の間隔 [m]
 
 %% スピーカーとマイクの配置
-<<<<<<< HEAD
 %% -------------------------------------------------------------------------
 
 num_sp = 32;      % 使用するスピーカー数
@@ -40,19 +39,9 @@ n_y = round(d2 / itv_y) + 1;
 
 % 外部関数 pos_sp_mic.m を呼び出し、座標と「実際に生成された総マイク数(num_mic)」を取得
 [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1, d2, pltPos);
-=======
-num_sp = 32;      % 使用するスピーカー数
-% 制御ゾーン（Bz, Dz）の設定
-zone_h = 0.6;             % 制御ゾーンの中心高さ(y座標) [m]
-dist_zone = 2.0;          % BzとDzの中心間距離 [m]
-bz_size = [0.28, 0.24];   % Bzの大きさ [幅(x), 奥行き(y)] [m]
-dz_size = [0.28, 0.24];   % Dzの大きさ [幅(x), 奥行き(y)] [m]
 
-% 制御点（マイク）の配置間隔 [x方向, y方向]
-itv_mic = [0.04, 0.08];
-
-[pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, zone_h,dist_zone, bz_size, dz_size, itv_mic, room_size, pltPos);
->>>>>>> 34eff5aa76c5b69dd0de3d9ef9a6e6c69074ce1d
+% Bright Zone のマイク数（pos_sp_mic が返す総マイク数の半分を BZ とする想定）
+num_bz = num_mic / 2;
 
 %% -------------------------------------------------------------------------
 %% 自由空間の伝達関数計算
@@ -65,16 +54,17 @@ G_ctrl = IR_freefield(pos_mic, pos_sp, k);
 %% フィルターの算出と音場制御
 %% -------------------------------------------------------------------------
 % 外部関数 filter_pm.m を呼び出し、PM法に基づいてスピーカーの駆動重みを計算
-drv = filter_pm(pos_mic, G_ctrl, freq, ang_wave, amp_src, Nsrc, c,num_bz);
+drv = filter_pm(pos_mic, G_ctrl, freq, ang_wave, amp_src, Nsrc, c, num_bz);
 
 %% -------------------------------------------------------------------------
 %% 制御結果の評価
 %% -------------------------------------------------------------------------
 % 各スピーカーの伝達関数にフィルターを掛け合わせ、制御点での合成音圧を計算
-p_ctrl = G_ctrl * drv;
+% G_ctrl は周波数次元を含む 3 次元配列の想定なので、周波数 1 のスライスを使用
+g_ctrl = G_ctrl(:,:,1);
+p_ctrl = g_ctrl * drv(:,1);
 
 % マイク群を「Bz」と「Dz」に半分ずつ分割
-num_bz = num_mic / 2;          % BZのマイク数（32点）
 p_bz = p_ctrl(1:num_bz);       % 前半：BZの音圧
 p_dz = p_ctrl(num_bz+1:end);   % 後半：Dzの音圧
 
@@ -99,4 +89,6 @@ run spl_distribution.m
 % コマンドウィンドウに結果（周波数、スピーカー数、マイク数、ACの計算値）をテキスト表示
 fprintf("f=%dHz, num_sp=%d, num_mic=%d, AC=%.3fdB\n", freq, num_sp, num_mic, AC_freq);
 
+% `plot_spl_profile.m` はプロファイル描画に `zone_h` を参照するため設定しておく
+zone_h = y_center;
 run plot_spl_profile.m

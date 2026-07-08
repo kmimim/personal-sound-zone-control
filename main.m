@@ -66,7 +66,7 @@ p_ctrl = g_ctrl * drv(:,1);
 
 % マイク群を「Bz」と「Dz」に半分ずつ分割
 p_bz = p_ctrl(1:num_bz);       % 前半：BZの音圧
-p_dz = p_ctrl(num_bz+1:num_bz+num_dz);   % 後半：DZの音圧
+p_dz = p_ctrl(num_bz+1:end);   % 後半：Dzの音圧
 
 % ACの計算
 % BZの平均音響エネルギーと、DZの平均音響エネルギーの比をデシベル(dB)で算出
@@ -84,9 +84,7 @@ map_name = sprintf("SPL_sp%d_mic%d_%dHz_center_%.2fm_AC=%.2f_%s.png", ...
                    num_sp, num_mic, freq, y_center, round(AC_freq), mthd_ctrl);
 
 % 外部スクリプト spl_distribution.m を実行し、部屋全体の音圧分布をプロット・画像保存
-if pltSPL
-    run spl_distribution.m
-end
+run spl_distribution.m
 
 % コマンドウィンドウに結果（周波数、スピーカー数、マイク数、ACの計算値）をテキスト表示
 fprintf("f=%dHz, num_sp=%d, num_mic=%d, AC=%.3fdB\n", freq, num_sp, num_mic, AC_freq);

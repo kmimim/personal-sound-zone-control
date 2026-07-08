@@ -10,7 +10,7 @@ actual_y = y(y_idx); % 実際に抽出されるy座標
 
 % 指定ラインの音圧レベル(SPL)を P_matrix から抽出
 spl_profile = P_matrix(y_idx, :);
-fprintf("★今からプロファイル作成を開始します★\n");
+fprintf("今からプロファイル作成を開始します\n");
 
 % 新しいグラフウィンドウを開く
 figure;

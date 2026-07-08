@@ -95,9 +95,9 @@ function [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1,
         figure % 新しいグラフウィンドウを開く
         
         % スピーカー位置を黒い「▲」でプロット
-        h1 = plot(pos_sp(:,1), pos_sp(:,2), '^k', 'MarkerFaceColor', 'k'); hold on;
+        h1 = plot(pos_sp(:,1), pos_sp(:,2), '^k', 'MarkerFaceColor', 'k' , 'MarkerSize', 4); hold on;
         % 制御点をサイズ10の「●」でプロット
-        h2 = scatter(pos_mic(:,1), pos_mic(:,2), 10, 'filled');
+        h2 = scatter(pos_mic(:,1), pos_mic(:,2), 4, 'filled');
         
         daspect([1 1 1])    % グラフの縦横比を 1:1 に固定
         xlim([-1.5,1.5 ])   % x軸の表示範囲を -1.5m 〜 1.5m に設定

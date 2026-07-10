@@ -34,11 +34,21 @@ function [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1,
         end
     end
 
-    % DZ（右）：【Lの字型に修正しつつ、点数をBzと完全に一致させる】
-    % 縦辺（長さ d2）と底辺（長さ d1）の総延長に沿って、点数を均等に分配します。
-    % これにより角の重複もなくなり、Bzと次元が一致するためエラーが解消します。
+    %GZ（中央：-0.5 ~ 0.5）：格子状に配置
+    gz_center = [0.0, y_center]; % 中央に配置
+    pos_gz = zeros(num_bz, 2);   % 点数はBZと完全に一致させる
+    n = 0;
+    for x_idx = 1:length(bz_x)
+        for y_idx = 1:length(bz_y)
+            n = n + 1;
+            pos_gz(n,:) = [bz_x(x_idx) + gz_center(1), ...
+                        bz_y(y_idx) + gz_center(2)];
+        end
+    end
+
+    % DZ（右：0.5 ~ 1.5）：今までと同様にＬの字配列に配置
     L_total = d1 + d2; 
-    s = linspace(0, L_total, num_bz)'; % 0からL字総延長までの等間隔ベクトル
+    s = linspace(0, L_total, num_bz)'; % 点数はBZと完全に一致させる
 
     pos_dz = zeros(num_bz, 2);
     for i = 1:num_bz
@@ -53,11 +63,10 @@ function [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1,
         end
     end
     
-    % 前半がブライト（格子）、後半がダーク（L字）となるよう1つの行列に結合
-    pos_mic = [pos_bz; pos_dz];
-    % 実際に生成された総点数を main.m 側へ返す
+    % 前半＝BZ（格子）、中盤＝GZ（格子）、後半＝DZ（L字）となるよう1つの行列に結合
+    pos_mic = [pos_bz; pos_gz; pos_dz];
+    % 実際に生成された総点数（3 * num_bz）を main.m 側へ返す
     num_mic = size(pos_mic, 1);
-
 
     %% ---------------------------------------------------------------------
     %% スピーカーアレイ（音源）の座標計算
@@ -93,19 +102,48 @@ function [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1,
     %% ---------------------------------------------------------------------
     if pltPos
         figure % 新しいグラフウィンドウを開く
+        hold on; % 先に重ね描きを有効にします
+        
+        % 全マイク座標から各ゾーンの座標を正しく抽出
+        p_bz = pos_mic(1:num_bz, :);
+        p_gz = pos_mic(num_bz+1:2*num_bz, :);
+        p_dz = pos_mic(2*num_bz+1:end, :);
+        
+        % 各ゾーンのx方向の境界を取得
+        bz_x_min = min(p_bz(:,1)); bz_x_max = max(p_bz(:,1));
+        gz_x_min = min(p_gz(:,1)); gz_x_max = max(p_gz(:,1));
+        dz_x_min = min(p_dz(:,1)); dz_x_max = max(p_dz(:,1));
+        
+        % Y軸の塗りつぶし範囲（マイクの上下に適度な余白を持たせる）
+        y_min_plot = min(pos_mic(:,2)) - 0.2;
+        y_max_plot = max(pos_mic(:,2)) + 0.2;
+        
+        % 1. BZの領域をシアンで薄く塗りつぶす
+        patch([bz_x_min bz_x_max bz_x_max bz_x_min], ...
+              [y_min_plot y_min_plot y_max_plot y_max_plot], ...
+              'c', 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'DisplayName', 'Bright Zone');
+          
+        % 2. GZの領域を緑で薄く塗りつぶす
+        patch([gz_x_min gz_x_max gz_x_max gz_x_min], ...
+              [y_min_plot y_min_plot y_max_plot y_max_plot], ...
+              'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Gradient Zone');
+          
+        % 3. DZの領域をグレーで薄く塗りつぶす
+        patch([dz_x_min dz_x_max dz_x_max dz_x_min], ...
+              [y_min_plot y_min_plot y_max_plot y_max_plot], ...
+              'k', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Dark Zone');
         
         % スピーカー位置を黒い「▲」でプロット
         h1 = plot(pos_sp(:,1), pos_sp(:,2), '^k', 'MarkerFaceColor', 'k' , 'MarkerSize', 4); hold on;
         % 制御点をサイズ10の「●」でプロット
-        h2 = scatter(pos_mic(:,1), pos_mic(:,2), 4, 'filled');
+        h2 = scatter(pos_mic(:,1), pos_mic(:,2), 4,[0, 0, 0.5], 'filled');
         
         daspect([1 1 1])    % グラフの縦横比を 1:1 に固定
         xlim([-1.5,1.5 ])   % x軸の表示範囲を -1.5m 〜 1.5m に設定
         ylim([0, 2])        % y軸の表示範囲を 0m 〜 2m に設定
-        grid on;            % グリッド線を表示
         
         xlabel("x[m]"); ylabel("y[m]"); % 軸ラベルの設定
-        legend({"sp", "mic"});           % 凡例の表示
+        legend([h1, h2], {"sp", "mic"});      % 凡例の表示
         
         % 設定条件を自動的に組み込んだ保存用ファイル名を作成
         filename = sprintf("plc_sp_%d_mic_%d_zone-h_%.2fm_zone-dis_%.2fm.png", ...

@@ -18,6 +18,8 @@ figure;
 % BZとDZのx方向の境界を取得 (すでに計算済みの con_bz, con_dz を再利用)
 bz_x_min = min(con_bz(:,1));
 bz_x_max = max(con_bz(:,1));
+gz_x_min = min(con_gz(:,1));
+gz_x_max = max(con_gz(:,1));
 dz_x_min = min(con_dz(:,1));
 dz_x_max = max(con_dz(:,1));
 
@@ -31,13 +33,18 @@ patch([bz_x_min bz_x_max bz_x_max bz_x_min], ...
       'c', 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'DisplayName', 'Bright Zone');
 hold on;
 
-% 2. DZの領域をグレーで薄く塗りつぶす (補助色付け)
+% 2. GZの領域を緑で薄く塗りつぶす (補助色付け)
+patch([gz_x_min gz_x_max gz_x_max gz_x_min], ...
+      [y_min_plot y_min_plot y_max_plot y_max_plot], ...
+      'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Gradient Zone');
+
+% 3. DZの領域をグレーで薄く塗りつぶす (補助色付け)
 patch([dz_x_min dz_x_max dz_x_max dz_x_min], ...
       [y_min_plot y_min_plot y_max_plot y_max_plot], ...
       'k', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Dark Zone');
 
-% 3. 音圧プロファイルの折れ線グラフを描画
-plot(x, spl_profile, 'b-', 'LineWidth', 1.5, ...
+% 4. 音圧プロファイルの折れ線グラフを描画
+plot(x, spl_profile, '-','Color', [0, 0, 0.5], 'LineWidth', 1.5, ...
     'DisplayName', sprintf('SPL Profile (y = %.2f m)', actual_y));
 
 % グラフの装飾設定

@@ -41,7 +41,7 @@ n_y = round(d2 / itv_y) + 1;
 [pos_sp, pos_mic, num_mic] = pos_sp_mic(num_sp, y_center, n_x, n_y, d1, d2, pltPos);
 
 % Bright Zone のマイク数（pos_sp_mic が返す総マイク数の半分を BZ とする想定）
-num_bz = num_mic / 2;
+num_bz = num_mic / 3;
 
 %% -------------------------------------------------------------------------
 %% 自由空間の伝達関数計算
@@ -66,7 +66,8 @@ p_ctrl = g_ctrl * drv(:,1);
 
 % マイク群を「Bz」と「Dz」に半分ずつ分割
 p_bz = p_ctrl(1:num_bz);       % 前半：BZの音圧
-p_dz = p_ctrl(num_bz+1:end);   % 後半：Dzの音圧
+p_gz = p_ctrl(num_bz+1:2*num_bz); % 中盤：GZの音圧
+p_dz = p_ctrl(2*num_bz+1:end);   % 後半：Dzの音圧
 
 % ACの計算
 % BZの平均音響エネルギーと、DZの平均音響エネルギーの比をデシベル(dB)で算出

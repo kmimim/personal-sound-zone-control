@@ -13,7 +13,7 @@ k = 2*pi*freq/c;  % 波数 : 空間的な位相の変化率を表す物理量
 pltPos = true;    % pltPos = スピーカーとマイクの配置図
 pltSPL = true;    % pltSPL = 空間全体の音圧レベル分布図
 
-mthd_ctrl = "pm"; % 音場制御の手法 = PM法
+mthd_ctrl = "wpm"; % 音場制御の手法 = PM法
 
 %% -------------------------------------------------------------------------
 %% 空間および制御ゾーンの設定
@@ -24,16 +24,17 @@ itv_room = 0.02;          % 空間全体の計算用格子点の間隔 [m]
 
 %% スピーカーとマイクの配置
 num_sp = 32;      % 使用するスピーカー数
-% 制御ゾーン（Bz, Dz）の設定
+% 制御ゾーン（Bz, Gz, Dz）の設定
 zone_h = 1.0;             % 制御ゾーンの中心高さ(y座標) [m]
-dist_zone = 2.0;          % BzとDzの中心間距離 [m]
-bz_size = [1.0, 2.0];   % Bzの大きさ [幅(x), 奥行き(y)] [m]
-dz_size = [1.0, 2.0];   % Dzの大きさ [幅(x), 奥行き(y)] [m]
+dist_zone = 2.0;          % BzとDzの中心間距離 [m] (現在は各ゾーンの絶対座標で配置)
+bz_size = [1.0, 2.0];     % Bzの大きさ [幅(x), 奥行き(y)] [m]
+gz_size = [1.0, 2.0];     % Gzの大きさ [幅(x), 奥行き(y)] [m] (新規追加)
+dz_size = [1.0, 2.0];     % Dzの大きさ [幅(x), 奥行き(y)] [m]
 
 % 制御点（マイク）の配置間隔 [x方向, y方向]
 itv_mic = [0.04, 0.08];
 
-[pos_sp, pos_mic, num_mic, num_bz] = pos_sp_mic(num_sp, zone_h, dist_zone, bz_size, dz_size, itv_mic, room_size, pltPos);
+[pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, zone_h, dist_zone, bz_size, gz_size, dz_size, itv_mic, room_size, pltPos);
 
 %% -------------------------------------------------------------------------
 %% 自由空間の伝達関数計算
@@ -46,7 +47,7 @@ G_ctrl = IR_freefield(pos_mic, pos_sp, k);
 %% フィルターの算出と音場制御
 %% -------------------------------------------------------------------------
 % 外部関数 filter_pm.m を呼び出し、PM法に基づいてスピーカーの駆動重みを計算
-drv = filter_pm(pos_mic, G_ctrl, freq, ang_wave, amp_src, Nsrc, c, num_bz);
+drv = filter_pm(pos_mic, G_ctrl, freq, ang_wave, amp_src, Nsrc, c, num_bz, num_gz);
 
 %% -------------------------------------------------------------------------
 %% 制御結果の評価
@@ -56,7 +57,8 @@ p_ctrl = G_ctrl * drv;
 
 % マイク群を「Bz」と「Dz」に半分ずつ分割
 p_bz = p_ctrl(1:num_bz);       % 前半：BZの音圧
-p_dz = p_ctrl(num_bz+1:end);   % 後半：Dzの音圧
+p_gz = p_ctrl(num_bz + 1:num_bz + num_gz); % 中間：GZの音圧
+p_dz = p_ctrl(num_bz + num_gz + 1:end);   % 後半：Dzの音圧
 
 % ACの計算
 % BZの平均音響エネルギーと、DZの平均音響エネルギーの比をデシベル(dB)で算出
@@ -77,7 +79,7 @@ map_name = sprintf("SPL_sp%d_mic%d_%dHz_center_%.2fm_AC=%.2f_%s.png", ...
 % 外部スクリプト spl_distribution.m を実行し、部屋全体の音圧分布をプロット・画像保存
 % y_center を zone_h としてスコープに追加
 y_center = zone_h;
-run spl_distribution.m
+spl_distribution;
 
 % コマンドウィンドウに結果（周波数、スピーカー数、マイク数、ACの計算値）をテキスト表示
 fprintf("f=%dHz, num_sp=%d, num_mic=%d, AC=%.3fdB\n", freq, num_sp, num_mic, AC_freq);

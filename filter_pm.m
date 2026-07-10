@@ -1,4 +1,4 @@
-function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c ,num_bz)
+function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz)
 
     % Gのサイズ取得
     % n_mic : 制御点(マイク)数
@@ -13,14 +13,9 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c ,num_bz)
     % 列：周波数
     drv_ls = zeros(n_sp, f_len);
 
-    % 周波数ごとに処理
     for kk = 1:f_len
-
-        % 現在の周波数における伝達関数行列
-        % サイズ: [マイク数 × スピーカ数]
         g = G(:,:,kk);
 
-        %--------------------------------------------------
         % 正則化パラメータの計算
         %
         % 最大固有値の10^-5倍
@@ -28,52 +23,65 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c ,num_bz)
         %--------------------------------------------------
         reg_para = 10^(-5) * eigs((g' * g), 1);
 
-        % 固定値を使う場合
-        % reg_para = 0.001;
+        p_des = zeros(n_mic, Nsrc);
+        w_vec = ones(n_mic, 1); % 重みベクトルの初期化
 
         %--------------------------------------------------
-        % Bright Zone の目標音圧生成
-        %
-        % 平面波
-        %
-        % p(x,y)
-        % = A exp(jk(xcosθ + ysinθ))
+        % 1. Bright Zone (BZ) の目標音圧と重み
         %--------------------------------------------------
-
-        p_des_bz = amp_src .* exp( ...
-            1i * (2*pi*f(kk)/c) * ...
-            (mic_geo(1:num_bz,1)*cos(ang_wave) + ...
-             mic_geo(1:num_bz,2)*sin(ang_wave)));
+        for i = 1:num_bz
+            x_m = mic_geo(i,1);
+            y_m = mic_geo(i,2);
+            p_des(i) = amp_src * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave)));
+            w_vec(i) = 1.0;
+        end
 
         %--------------------------------------------------
-        % Dark Zone の目標音圧
-        %
-        % 音を聞こえなくしたいので0
+        % 2. Gradation Zone (GZ) の目標音圧と重み
         %--------------------------------------------------
-        p_des_dz = zeros(n_mic - num_bz, Nsrc);
+        gz_idx_start = num_bz + 1;
+        gz_idx_end = num_bz + num_gz;
+        
+        % GZのx座標の範囲を取得し、中間点を算出
+        min_x_gz = min(mic_geo(gz_idx_start:gz_idx_end, 1));
+        max_x_gz = max(mic_geo(gz_idx_start:gz_idx_end, 1));
+        mid_x_gz = (min_x_gz + max_x_gz) / 2;
+
+        for i = gz_idx_start:gz_idx_end
+            x_m = mic_geo(i,1);
+            y_m = mic_geo(i,2);
+
+            if x_m <= mid_x_gz
+                % GZ前半: 重み 1.0 -> 0.01 / 振幅 1.0 -> 0.0
+                t = (x_m - min_x_gz) / (mid_x_gz - min_x_gz);
+                w_vec(i) = 1.0 - t * 0.99;
+                amp_g = amp_src * (1.0 - t);
+                p_des(i) = amp_g * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave)));
+            else
+                % GZ後半: 無音、重み 0.01 固定
+                w_vec(i) = 0.01;
+                p_des(i) = 0;
+            end
+        end
 
         %--------------------------------------------------
-        % 全制御点の目標音圧ベクトル
-        %
-        % 上半分 : Bright Zone
-        % 下半分 : Dark Zone
+        % 3. Dark Zone (DZ) の目標音圧と重み
         %--------------------------------------------------
-        p_des = [p_des_bz;
-                 p_des_dz];
+        dz_idx_start = num_bz + num_gz + 1;
+        for i = dz_idx_start:n_mic
+            p_des(i) = 0;
+            w_vec(i) = 1.0;
+        end
+
+        % 重み行列 W (対角行列)
+        W = diag(w_vec);
 
         %--------------------------------------------------
-        % 最小二乗法 (Pressure Matching)
-        %
-        % d = (GᴴG + λI)^(-1) Gᴴ p_des
-        %
-        % d : スピーカ駆動信号
-        % λ : 正則化パラメータ
+        % 重み付き最小二乗最適化 (Weighted PM)
+        % d = (GᴴWG + λI)^(-1) GᴴW p_des
         %--------------------------------------------------
-        drv_single = inv(g' * g + reg_para * eye(n_sp)) ...
-                     * g' * p_des;
+        drv_single = (g' * W * g + reg_para * eye(n_sp)) \ (g' * W * p_des);
 
-        % 周波数ごとの結果を保存
         drv_ls(:,kk) = drv_single;
     end
-
 end

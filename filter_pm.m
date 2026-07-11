@@ -30,7 +30,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c ,num_bz)
     % 中央(x=0.0)に近づくほど重みを徐々に減らしていく
     % x = -0.5 で重み 1.0（きっちり制御開始）
     % x =  0.0 で重み 0.01（ほとんどサボる）
-    w_min = 0.01; 
+    w_min = 0.1; 
     
     for i = 1:length(gz_indices)
         idx = gz_indices(i);

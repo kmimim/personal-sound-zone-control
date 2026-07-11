@@ -59,7 +59,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
                 p_des(i) = amp_g * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave)));
             else
                 % GZ後半: 無音、重み 0.01 固定
-                w_vec(i) = 0.01;
+                w_vec(i) = 0.1;
                 p_des(i) = 0;
             end
         end

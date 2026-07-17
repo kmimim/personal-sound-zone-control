@@ -38,7 +38,6 @@ p_t_dB = 10 * log10(sum(abs(p_t).^2, 2));
 %% -------------------------------------------------------------------------
 % マイクの座標から、ブライトゾーンとダークゾーンのそれぞれの位置を抽出
 pos_bz = pos_mic(1:num_bz, :);
-pos_gz = pos_mic(num_bz+1 : num_bz+num_gz, :);
 pos_dz = pos_mic(num_bz+num_gz+1:end, :);
 
 offset = 0.01;
@@ -47,15 +46,12 @@ offset = 0.01;
 bx_min = min(pos_bz(:,1)) + offset; bx_max = max(pos_bz(:,1)) - offset;
 by_min = min(pos_bz(:,2)) + offset; by_max = max(pos_bz(:,2)) - offset;
 
-gx_min = min(pos_gz(:,1)) + offset; gx_max = max(pos_gz(:,1)) - offset;
-gy_min = min(pos_gz(:,2)) + offset; gy_max = max(pos_gz(:,2)) - offset;
-
 dx_min = min(pos_dz(:,1)) + offset; dx_max = max(pos_dz(:,1)) - offset;
 dy_min = min(pos_dz(:,2)) + offset; dy_max = max(pos_dz(:,2)) - offset;
 
 % 補正した座標で、それぞれの四角形のコーナー座標を構築（5つの角で始点に戻る）
 con_bz = [bx_min, by_min; bx_min, by_max; bx_max, by_max; bx_max, by_min; bx_min, by_min];
-con_gz = [gx_min, gy_min; gx_min, gy_max; gx_max, gy_max; gx_max, gy_min; gx_min, gy_min];
+con_gz = [];
 con_dz = [dx_min, dy_min; dx_min, dy_max; dx_max, dy_max; dx_max, dy_min; dx_min, dy_min];
 
 %% -------------------------------------------------------------------------
@@ -99,7 +95,6 @@ axis xy; % imagesc特有の上下反転を直し、座標の向きを正常化�
 
 h2 = scatter(pos_sp(:,1), pos_sp(:,2), 15, 'k', '^', 'filled'); hold on;
 % ③ エリアの点線を見やすい色（シアンと白）、細い破線（LineWidth: 0.8）に変更
-h4 = plot(con_bz(:,1), con_bz(:,2), 'c--', 'LineWidth', 0.8); hold on;
 h5 = plot(con_dz(:,1), con_dz(:,2), 'w--', 'LineWidth', 0.8); hold off;
 % グラフの装飾設定
 xlabel("x[m]"); ylabel("y[m]"); % 軸のラベル

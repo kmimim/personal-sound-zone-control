@@ -16,7 +16,6 @@ figure;
 
 % 各ゾーンのx方向の境界を取得 (すでに計算済みの con_bz, con_gz, con_dz を利用)
 bz_x_min = min(con_bz(:,1)); bz_x_max = max(con_bz(:,1));
-gz_x_min = min(con_gz(:,1)); gz_x_max = max(con_gz(:,1)); % ★ここを追加しました
 dz_x_min = min(con_dz(:,1)); dz_x_max = max(con_dz(:,1));
 
 % Y軸の描画範囲を設定
@@ -28,11 +27,6 @@ patch([bz_x_min bz_x_max bz_x_max bz_x_min], ...
       [y_min_plot y_min_plot y_max_plot y_max_plot], ...
       'c', 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'DisplayName', 'Bright Zone');
 hold on;
-
-% 2. GZ領域 (グリーン) 
-patch([gz_x_min gz_x_max gz_x_max gz_x_min], ...
-      [y_min_plot y_min_plot y_max_plot y_max_plot], ...
-      'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Gradation Zone');
 
 % 3. DZ領域 (グレー)
 patch([dz_x_min dz_x_max dz_x_max dz_x_min], ...

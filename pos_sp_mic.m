@@ -16,17 +16,14 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
 
     % -----------------------
     % 各ゾーンのシフト後中心位置
-    % BZを左、GZを中央、DZを右に配置
     % -----------------------
-    bz_center = [-1.0, y_center];
-    gz_center = [ 0.0, y_center];
-    dz_center = [ 1.0, y_center];
+    bz_center = [-dist_zone/2, y_center];
+    dz_center = [ dist_zone/2,  y_center];
 
     % -----------------------
-    % 点格納
+    % 点格納（配置ロジックはそのまま維持）
     % -----------------------
     pos_bz = zeros(n_x*n_y, 2);
-    pos_gz = zeros(n_x*n_y, 2);
     pos_dz = zeros(n_x*n_y, 2);
 
     n = 0;
@@ -35,18 +32,16 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
             n = n + 1;
             % BZ（左）
             pos_bz(n,:) = [bz_x(x_idx) + bz_center(1), bz_y(y_idx) + bz_center(2)];
-            % GZ（中央）
-            pos_gz(n,:) = [bz_x(x_idx) + gz_center(1), bz_y(y_idx) + gz_center(2)];
             % DZ（右）
             pos_dz(n,:) = [bz_x(x_idx) + dz_center(1), bz_y(y_idx) + dz_center(2)];
         end
     end
     
     % BZ, GZ, DZを結合し、総マイク数を算出
-    pos_mic = [pos_bz; pos_gz; pos_dz];
+    pos_mic = [pos_bz; pos_dz];
     num_mic = size(pos_mic, 1);
     num_bz = size(pos_bz, 1);
-    num_gz = size(pos_gz, 1);
+    num_gz = 0; % GZは未使用のため0に設定
 
     %% ---------------------------------------------------------------------
     %% スピーカーアレイ（音源）の座標計算
@@ -71,28 +66,45 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
     %% 配置図の描画と画像保存
     %% ---------------------------------------------------------------------
     if pltPos
-        figure 
+        figure;
+        hold on; % 【修正】最背面にpatchを描画するため、最初にhold onを設定
         
-        % スピーカーと各ゾーンのマイク配置を色分けして散布図で描画
-        scatter(pos_sp(:,1), pos_sp(:,2), 15, 'k', '^', 'filled'); hold on;        
-        scatter(pos_bz(:,1), pos_bz(:,2), 3, [0.25, 0.60, 0.75], 'filled'); % BZはシアン
-        scatter(pos_gz(:,1), pos_gz(:,2), 3, [0.45, 0.70, 0.50], 'filled'); % GZはグリーン
-        scatter(pos_dz(:,1), pos_dz(:,2), 3, [0.60, 0.60, 0.60], 'filled'); % DZはブラック
+        % 各ゾーンのx方向の境界を取得（patch用）
+        bz_x_min = min(pos_bz(:,1)); bz_x_max = max(pos_bz(:,1));
+        dz_x_min = min(pos_dz(:,1)); dz_x_max = max(pos_dz(:,1));
+        
+        % Y軸の塗りつぶし範囲（マイクの上下に適度な余白を持たせる）
+        y_min_plot = min(pos_mic(:,2)) - 0.2;
+        y_max_plot = max(pos_mic(:,2)) + 0.2;
+        
+        % 【修正】1つ目のコードを参考に、各領域をpatchで薄く塗りつぶす
+        % （凡例の重複を防ぐため 'HandleVisibility', 'off' を設定）
+        patch([bz_x_min bz_x_max bz_x_max bz_x_min], [y_min_plot y_min_plot y_max_plot y_max_plot], ...
+              [0.25, 0.60, 0.75], 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+        patch([dz_x_min dz_x_max dz_x_max dz_x_min], [y_min_plot y_min_plot y_max_plot y_max_plot], ...
+              [0.60, 0.60, 0.60], 'FaceAlpha', 0.10, 'EdgeColor', 'none', 'HandleVisibility', 'off');
 
+        % スピーカーと各ゾーンのマイク配置を色分けして散布図で描画（ハンドルを取得）
+        h_sp = scatter(pos_sp(:,1), pos_sp(:,2), 15, 'k', '^', 'filled');        
+        h_bz = scatter(pos_bz(:,1), pos_bz(:,2), 3, [0.25, 0.60, 0.75], 'filled'); % BZ: シアン系
+        h_dz = scatter(pos_dz(:,1), pos_dz(:,2), 3, [0.60, 0.60, 0.60], 'filled'); % DZ: グレー系
 
-        daspect([1 1 1])
-        xlim([room_size(1), room_size(2)])
-        ylim([room_size(3), room_size(4)])
+        daspect([1 1 1]);
+        xlim([room_size(1), room_size(2)]);
+        ylim([room_size(3), room_size(4)]);
         grid on;
         
         xlabel("x[m]"); ylabel("y[m]");
-        legend({"Speaker", "Bright Zone", "Gradation Zone", "Dark Zone"});
         
+        % 取得したハンドルを用いて凡例をすっきりと整理
+        legend([h_sp, h_bz, h_dz], {"Speaker", "Bright Zone", "Dark Zone"});
+
+        % ファイル名とタイトルに dist_zone (dis) を正しく反映
         filename = sprintf("plc_sp_%d_mic_%d_zone-h_%.2fm_zone-dis_%.2fm.png", ...
-                           num_sp, num_mic, y_center, dist_zone);
-        title(sprintf("sp=%d, mic=%d, height=%.2f", num_sp, num_mic, y_center));
+                            num_sp, num_mic, y_center, dist_zone);
+        title(sprintf("sp=%d, mic=%d, height=%.2f, dis=%.2f", num_sp, num_mic, y_center, dist_zone));
         
-        set(gca, 'fontsize', 15)
+        set(gca, 'fontsize', 15);
         saveas(gcf, filename, 'png');
     end
 end

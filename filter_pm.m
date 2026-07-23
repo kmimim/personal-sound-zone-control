@@ -21,7 +21,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         % 最大固有値の10^-5倍
         % 行列が悪条件になるのを防ぐ
         %--------------------------------------------------
-        reg_para = 10^(-5) * eigs((g' * g), 1);
+        reg_para = 10^(-3) * eigs((g' * g), 1);
 
         p_des = zeros(n_mic, Nsrc);
         w_vec = ones(n_mic, 1); % 重みベクトルの初期化
@@ -42,7 +42,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         dz_idx_start = num_bz + 1;
         for i = dz_idx_start:n_mic
             p_des(i) = 0;
-            w_vec(i) = 1.0;
+            w_vec(i) = 15.0;
         end
 
         % 重み行列 W (対角行列)

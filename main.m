@@ -5,9 +5,10 @@ Nsrc = 1;         % 制御目標とする仮想的な音源の数（ここでは
 ang_wave = pi/2;  % 音波が進んでくる方向 [rad]（pi/2 = 90度：真下から真上へ進む平面波）
 amp_src = ones(1,Nsrc); % 仮想音源の振幅（1 = 基準振幅として設定）
 
-freq = 1000;      % シミュレーションする音波の周波数 [Hz]
-c = 340;          % 音速 [m/s]
-k = 2*pi*freq/c;  % 波数 : 空間的な位相の変化率を表す物理量
+freq_list = 500:100:2000;
+c = 340;% 音速 [m/s]
+k_list = 2*pi*freq_list/c;
+f_len = length(freq_list);
 
 % グラフ描画のフラグ
 pltPos = true;    % pltPos = スピーカーとマイクの配置図
@@ -23,7 +24,7 @@ room_size = [-1.0, 1.0, 0, 2.0];
 itv_room = 0.02;          % 空間全体の計算用格子点の間隔 [m]
 
 %% スピーカーとマイクの配置
-num_sp = 64;      % 使用するスピーカー数
+num_sp = 32;      % 使用するスピーカー数
 % 制御ゾーン（Bz, Gz, Dz）の設定
 zone_h = 1.0;             % 制御ゾーンの中心高さ(y座標) [m]
 bz_size = [1.0, 2.0];     % Bzの大きさ [幅(x), 奥行き(y)] [m]
@@ -40,30 +41,34 @@ itv_mic = [0.04, 0.08];
 %% 自由空間の伝達関数計算
 %% -------------------------------------------------------------------------
 % 外部関数 IR_freefield.m を呼び出し、各スピーカーから各マイクへの音の伝わり方を計算
-% G_ctrl : 伝達関数行列[64マイク × 32スピーカー × 1周波数]
-G_ctrl = IR_freefield(pos_mic, pos_sp, k);
 
 %% -------------------------------------------------------------------------
 %% フィルターの算出と音場制御
 %% -------------------------------------------------------------------------
-% 外部関数 filter_pm.m を呼び出し、PM法に基づいてスピーカーの駆動重みを計算
-drv = filter_pm(pos_mic, G_ctrl, freq, ang_wave, amp_src, Nsrc, c, num_bz, num_gz);
+% G_ctrl : 伝達関数行列[64マイク × 32スピーカー × 1周波数]
+G_ctrl = IR_freefield(pos_mic, pos_sp, k_list);
+drv = filter_pm(pos_mic, G_ctrl, freq_list, ang_wave, amp_src, Nsrc, c, num_bz, num_gz);
 
 %% -------------------------------------------------------------------------
 %% 制御結果の評価
 %% -------------------------------------------------------------------------
-% 各スピーカーの伝達関数にフィルターを掛け合わせ、制御点での合成音圧を計算
-p_ctrl = G_ctrl * drv;
+p_ctrl = zeros(num_mic, f_len);
 
-% マイク群を「Bz」と「Dz」に半分ずつ分割
-p_bz = p_ctrl(1:num_bz);       
-p_gz = [];                                 % ★ 空にする（または削除）
-p_dz = p_ctrl(num_bz + 1:end);             % ★ num_bz + num_gz + 1:end から変更
+% 全周波数分のマイク位置での合成音圧を計算
+for n = 1:f_len
+    p_ctrl(:, n) = G_ctrl(:,:,n) * drv(:,n);
+end
 
-% ACの計算
-% BZの平均音響エネルギーと、DZの平均音響エネルギーの比をデシベル(dB)で算出
-% 値が大きいほど、2つのゾーン間の音の格差（遮音性能）が優れていることを示す
-AC_freq = 10 * log10(sum(abs(p_bz).^2) ./ sum(abs(p_dz).^2));
+% マイク群を分割 (全周波数分のデータ)
+p_bz = p_ctrl(1:num_bz, :);
+p_gz = p_ctrl(num_bz + 1:num_bz + num_gz, :);
+p_dz = p_ctrl(num_bz + num_gz + 1:end, :);
+
+% 広帯域全体のAC (空間と周波数のすべてのエネルギーを合算)
+% p_bz(:) とすることで、行列内の全要素を1つの列ベクトルにして一気に計算します
+AC_total = 10 * log10( sum(abs(p_bz(:)).^2) / sum(abs(p_dz(:)).^2) );
+
+fprintf("Broadband: 500-2000Hz, AC=%.3fdB\n", AC_total);
 
 % 各マイク位置における音圧レベル（SPL）をdBスケールに変換
 SPL_ctrl = 10 * log10(abs(p_ctrl).^2);
@@ -72,16 +77,11 @@ SPL_ctrl = 10 * log10(abs(p_ctrl).^2);
 %% 空間全体の音圧分布図の作成と結果表示
 %% -------------------------------------------------------------------------
 % 保存する画像ファイル名の生成
-% y_center を zone_h に変更
-map_name = sprintf("SPL_sp%d_mic%d_%dHz_center_%.2fm_AC=%.2f_%s.png", ...
-                   num_sp, num_mic, freq, zone_h, round(AC_freq), mthd_ctrl);
-
-% 外部スクリプト spl_distribution.m を実行し、部屋全体の音圧分布をプロット・画像保存
-% y_center を zone_h としてスコープに追加
+% 画像ファイル名の設定
+map_name = sprintf("SPL_Broadband_500-2000Hz_AC=%.2f.png", round(AC_total));
 y_center = zone_h;
 spl_distribution;
 
 % コマンドウィンドウに結果（周波数、スピーカー数、マイク数、ACの計算値）をテキスト表示
-fprintf("f=%dHz, num_sp=%d, num_mic=%d, AC=%.3fdB\n", freq, num_sp, num_mic, AC_freq);
-
+fprintf("f=%d-%dHz, num_sp=%d, num_mic=%d, AC=%.3fdB\n", freq_list(1), freq_list(end), num_sp, num_mic, AC_total);
 run plot_spl_profile.m

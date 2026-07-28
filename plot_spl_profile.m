@@ -57,5 +57,6 @@ grid on;
 legend('Location', 'best');
 
 % プロファイルグラフも画像として保存する場合
-profile_name = sprintf("SPL_Profile_y%.2fm_%dHz.png", actual_y, freq);
+profile_name = sprintf("SPL_Profile_y%.2fm.png", actual_y);
+drawnow;
 saveas(gcf, profile_name, 'png');

@@ -14,12 +14,12 @@ y = room_size(3) : itv_room : room_size(4);
 pos_target = [X(:), Y(:)];
 
 % 外部関数 IR_freefield.m を再利用し、32台のスピーカーから「空間内のすべての評価点」への伝達関数を計算
-G_target = IR_freefield(pos_target, pos_sp, k);
+G_target = IR_freefield(pos_target, pos_sp, k_list);
 
 %% -------------------------------------------------------------------------
 %% 2. 空間全体の音圧レベル（SPL [dB]）の計算
 %% -------------------------------------------------------------------------
-f_len = 1; % 対象の周波数長（1）
+f_len = length(freq_list);
 
 % 空間内のすべての点における複素音圧を格納する行列を初期化
 p_t = zeros(length(pos_target), f_len);

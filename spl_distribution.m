@@ -14,12 +14,12 @@ y = room_size(3) : itv_room : room_size(4);
 pos_target = [X(:), Y(:)];
 
 % 外部関数 IR_freefield.m を再利用し、32台のスピーカーから「空間内のすべての評価点」への伝達関数を計算
-G_target = IR_freefield(pos_target, pos_sp, k);
+G_target = IR_freefield(pos_target, pos_sp, k_list);
 
 %% -------------------------------------------------------------------------
 %% 2. 空間全体の音圧レベル（SPL [dB]）の計算
 %% -------------------------------------------------------------------------
-f_len = 1; % 対象の周波数長（1）
+f_len = length(freq_list);
 
 % 空間内のすべての点における複素音圧を格納する行列を初期化
 p_t = zeros(length(pos_target), f_len);
@@ -36,31 +36,27 @@ p_t_dB = 10 * log10(sum(abs(p_t).^2, 2));
 %% -------------------------------------------------------------------------
 %% 3. グラフに描画する各ゾーンの「四角い枠線」のコーナー座標計算
 %% -------------------------------------------------------------------------
-% マイクの座標から、各ゾーンのそれぞれの位置を抽出
-pos_bz = pos_mic(1:num_bz, :);             % 前半：ブライトゾーン
-pos_gz = pos_mic(num_bz+1:2*num_bz, :);    % 中盤：グラデーションゾーン（必要に応じて）
-pos_dz = pos_mic(2*num_bz+1:end, :);       % 後半：ダークゾーン
+% マイクの座標から、ブライトゾーンとダークゾーンのそれぞれの位置を抽出
+pos_bz = pos_mic(1:num_bz, :);
+pos_gz = pos_mic(num_bz+1 : num_bz+num_gz, :);
+pos_dz = pos_mic(num_bz+num_gz+1:end, :);
 
-% 【ブライトゾーンを囲む四角形の5つの角（始点に戻る）の座標を特定】
-con_bz(1,:) = [min(pos_bz(:,1)), min(pos_bz(:,2))]; % 左下
-con_bz(2,:) = [min(pos_bz(:,1)), max(pos_bz(:,2))]; % 左上
-con_bz(3,:) = [max(pos_bz(:,1)), max(pos_bz(:,2))]; % 右上
-con_bz(4,:) = [max(pos_bz(:,1)), min(pos_bz(:,2))]; % 右下
-con_bz(5,:) = con_bz(1,:);                          % 左下（枠を閉じる）
+offset = 0.01;
 
-% 【グラデーションゾーンを囲む四角形の5つの角の座標を特定】
-con_gz(1,:) = [min(pos_gz(:,1)), min(pos_gz(:,2))]; % 左下
-con_gz(2,:) = [min(pos_gz(:,1)), max(pos_gz(:,2))]; % 左上
-con_gz(3,:) = [max(pos_gz(:,1)), max(pos_gz(:,2))]; % 右上
-con_gz(4,:) = [max(pos_gz(:,1)), min(pos_gz(:,2))]; % 右下
-con_gz(5,:) = con_gz(1,:);                          % 左下（枠を閉じる）
+% 各ゾーンの最小・最大座標を取得し、オフセットを適用してわずかに内側に縮める
+bx_min = min(pos_bz(:,1)) + offset; bx_max = max(pos_bz(:,1)) - offset;
+by_min = min(pos_bz(:,2)) + offset; by_max = max(pos_bz(:,2)) - offset;
 
-% 【ダークゾーンを囲む四角形の5つの角の座標を特定】
-con_dz(1,:) = [min(pos_dz(:,1)), min(pos_dz(:,2))]; % 左下
-con_dz(2,:) = [min(pos_dz(:,1)), max(pos_dz(:,2))]; % 左上
-con_dz(3,:) = [max(pos_dz(:,1)), max(pos_dz(:,2))]; % 右上
-con_dz(4,:) = [max(pos_dz(:,1)), min(pos_dz(:,2))]; % 右下
-con_dz(5,:) = con_dz(1,:);                          % 左下（枠を閉じる）
+gx_min = min(pos_gz(:,1)) + offset; gx_max = max(pos_gz(:,1)) - offset;
+gy_min = min(pos_gz(:,2)) + offset; gy_max = max(pos_gz(:,2)) - offset;
+
+dx_min = min(pos_dz(:,1)) + offset; dx_max = max(pos_dz(:,1)) - offset;
+dy_min = min(pos_dz(:,2)) + offset; dy_max = max(pos_dz(:,2)) - offset;
+
+% 補正した座標で、それぞれの四角形のコーナー座標を構築（5つの角で始点に戻る）
+con_bz = [bx_min, by_min; bx_min, by_max; bx_max, by_max; bx_max, by_min; bx_min, by_min];
+con_gz = [gx_min, gy_min; gx_min, gy_max; gx_max, gy_max; gx_max, gy_min; gx_min, gy_min];
+con_dz = [dx_min, dy_min; dx_min, dy_max; dx_max, dy_max; dx_max, dy_min; dx_min, dy_min];
 
 %% -------------------------------------------------------------------------
 %% 4. 音圧分布図のプロットと画像保存
@@ -95,6 +91,7 @@ colormap(custom_cmap);
 
 % 1次元の音圧ベクトルを、2次元の格子サイズ（画像形状）に変形
 P_matrix = reshape(p_t_dB, size(X)); 
+
 
 % imagesc を使って音圧分布を画像としてプロット（これで枠線でスパッと切れます）
 h1 = imagesc(x, y, P_matrix); hold on;

@@ -43,21 +43,5 @@ function G = IR_freefield(mic_geo, sp_geo, k)
     
     % 周波数（波数 k）の数だけループ（今回のメイン処理では1回のみ）
     for kk = 1:length(k)
-        % マイクのループ
-        for ii = 1:n_mic
-            % スピーカーのループ
-            for jj = 1:n_sp
-                
-                % 【物理公式の適用】
-                % 2次元自由空間における点音源（線音源）からの波動伝播の基本解を計算します。
-                % 公式: G = (i / 4) * H0_1(k * r)
-                %   1i         : MATLABにおける虚数単位 (i)
-                %   besselh(0,1,...) : 第1種第0次のハンケル関数（複素数の波の広がりと減衰を表す）
-                %   k(kk)      : 現在の周波数の波数
-                %   r_ctrl(ii,jj) : 対象のマイクとスピーカーの間の直線距離
-                G(ii, jj, kk) = (1i / 4) * besselh(0, 1, k(kk) * r_ctrl(ii, jj));
-                
-            end
+            G(:,:,kk) = (1i / 4) * besselh(0, 1, k(kk) * r_ctrl);
         end
-    end
-end

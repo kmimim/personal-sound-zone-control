@@ -72,7 +72,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         dz_idx_start = num_bz + num_gz + 1;
         for i = dz_idx_start:n_mic
             p_des(i) = 0;
-            w_vec(i) = 100.0;
+            w_vec(i) = 500.0;
         end
 
         % 重み行列 W (対角行列)

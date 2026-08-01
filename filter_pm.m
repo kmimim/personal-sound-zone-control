@@ -36,30 +36,40 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
             w_vec(i) = 1.0;
         end
 
-        %--------------------------------------------------
+%--------------------------------------------------
         % 2. Gradation Zone (GZ) の目標音圧と重み
         %--------------------------------------------------
         gz_idx_start = num_bz + 1;
         gz_idx_end = num_bz + num_gz;
         
-        % GZのx座標の範囲を取得し、中間点を算出
         min_x_gz = min(mic_geo(gz_idx_start:gz_idx_end, 1));
         max_x_gz = max(mic_geo(gz_idx_start:gz_idx_end, 1));
         mid_x_gz = (min_x_gz + max_x_gz) / 2;
+
+        % 減衰の急峻さを制御するパラメータ (大きいほど急速に落ちる)
+        alpha = 5.0; 
 
         for i = gz_idx_start:gz_idx_end
             x_m = mic_geo(i,1);
             y_m = mic_geo(i,2);
 
             if x_m <= mid_x_gz
-                % GZ前半: 重み 1.0 -> 0.01 / 振幅 1.0 -> 0.0
+                % --- GZ前半 (-0.5m ～ 0m): 急速減衰ゾーン ---
+                % 0 ～ 1 に正規化した位置パラメータ t
                 t = (x_m - min_x_gz) / (mid_x_gz - min_x_gz);
-                w_vec(i) = 1.0 - t * 0.99;
-                amp_g = amp_src * (1.0 - t);
+                
+                % 1. 目標音圧の急速（指数）減衰: 1.0 -> 0.0067 (約 -43dB)
+                amp_g = amp_src * exp(-alpha * t);
                 p_des(i) = amp_g * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave)));
+                
+                % 2. 重みの急速増加 (対数スケールで 1.0 -> 500.0)
+                %    音を強制的に消去させるため、重みを強力にかける
+                log_w = log10(1.0) + t * (log10(500.0) - log10(1.0));
+                w_vec(i) = 10^(log_w);
+                
             else
-                % GZ後半: 無音、重み 0.01 固定
-                w_vec(i) = 0.1;
+                % --- GZ後半 (0m ～ 0.5m): 完全にDZ（消音）扱い ---
+                w_vec(i) = 100.0;
                 p_des(i) = 0;
             end
         end
@@ -70,7 +80,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         dz_idx_start = num_bz + num_gz + 1;
         for i = dz_idx_start:n_mic
             p_des(i) = 0;
-            w_vec(i) = 500.0;
+            w_vec(i) = 100.0;
         end
 
         % 重み行列 W (対角行列)

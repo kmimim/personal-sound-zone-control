@@ -68,7 +68,7 @@ p_dz = p_ctrl(num_bz + num_gz + 1:end, :);
 % p_bz(:) とすることで、行列内の全要素を1つの列ベクトルにして一気に計算します
 AC_total = 10 * log10( sum(abs(p_bz(:)).^2) / sum(abs(p_dz(:)).^2) );
 
-fprintf("Broadband: 500-2000Hz, AC=%.3fdB\n", AC_total);
+fprintf("Broadband: %d-%dHz, AC=%.3fdB\n", freq_list(1), freq_list(end), AC_total);
 
 % 各マイク位置における音圧レベル（SPL）をdBスケールに変換
 SPL_ctrl = 10 * log10(abs(p_ctrl).^2);
@@ -78,10 +78,19 @@ SPL_ctrl = 10 * log10(abs(p_ctrl).^2);
 %% -------------------------------------------------------------------------
 % 保存する画像ファイル名の生成
 % 画像ファイル名の設定
-map_name = sprintf("SPL_Broadband_500-2000Hz_AC=%.2f.png", round(AC_total));
+map_name = sprintf("SPL_Broadband_%d-%dHz_AC=%.2f.png", freq_list(1), freq_list(end), AC_total);
 y_center = zone_h;
-spl_distribution;
+
+% pltSPL フラグが宣言のみで未使用だったため、ここで実際にON/OFFを反映させる
+if pltSPL
+    spl_distribution;
+end
 
 % コマンドウィンドウに結果（周波数、スピーカー数、マイク数、ACの計算値）をテキスト表示
 fprintf("f=%d-%dHz, num_sp=%d, num_mic=%d, AC=%.3fdB\n", freq_list(1), freq_list(end), num_sp, num_mic, AC_total);
-run plot_spl_profile.m
+
+% plot_spl_profile.m は spl_distribution.m が作る P_matrix/x/y/con_bz等に依存するため、
+% 同じ pltSPL フラグで連動させる（pltSPL=falseのときに未定義変数エラーになるのを防ぐ）
+if pltSPL
+    run plot_spl_profile.m
+end

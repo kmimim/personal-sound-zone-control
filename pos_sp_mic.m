@@ -6,42 +6,62 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
     %% ---------------------------------------------------------------------
     %% 制御ゾーンの座標計算
     %% ---------------------------------------------------------------------
-    % 各ゾーンの格子点の数と幅を計算 (すべてのゾーンが同じ間隔・サイズを前提)
-    n_x = round(bz_size(1) / itv_mic(1)) + 1;
-    n_y = round(bz_size(2) / itv_mic(2)) + 1;
-    
-    % 格子座標の配列を生成
-    bz_x = linspace(-bz_size(1)/2, bz_size(1)/2, n_x);
-    bz_y = linspace(-bz_size(2)/2, bz_size(2)/2, n_y);
+    % 各ゾーンごとに、それぞれのサイズ(bz_size/gz_size/dz_size)から
+    % 独立して格子点数・格子座標を計算する
+    n_x_bz = round(bz_size(1) / itv_mic(1)) + 1;
+    n_y_bz = round(bz_size(2) / itv_mic(2)) + 1;
+    bz_x = linspace(-bz_size(1)/2, bz_size(1)/2, n_x_bz);
+    bz_y = linspace(-bz_size(2)/2, bz_size(2)/2, n_y_bz);
+
+    n_x_gz = round(gz_size(1) / itv_mic(1)) + 1;
+    n_y_gz = round(gz_size(2) / itv_mic(2)) + 1;
+    gz_x = linspace(-gz_size(1)/2, gz_size(1)/2, n_x_gz);
+    gz_y = linspace(-gz_size(2)/2, gz_size(2)/2, n_y_gz);
+
+    n_x_dz = round(dz_size(1) / itv_mic(1)) + 1;
+    n_y_dz = round(dz_size(2) / itv_mic(2)) + 1;
+    dz_x = linspace(-dz_size(1)/2, dz_size(1)/2, n_x_dz);
+    dz_y = linspace(-dz_size(2)/2, dz_size(2)/2, n_y_dz);
 
     % -----------------------
     % 各ゾーンのシフト後中心位置
-    % BZを左、GZを中央、DZを右に配置
+    % BZを左、GZを中央、DZを右に配置。
+    % dist_zoneでBZ-DZ間の中心間距離を制御する
     % -----------------------
-    bz_center = [-1.0, y_center];
-    gz_center = [ 0.0, y_center];
-    dz_center = [ 1.0, y_center];
+    bz_center = [-dist_zone/2, y_center];
+    gz_center = [ 0.0,         y_center];
+    dz_center = [ dist_zone/2, y_center];
 
     % -----------------------
-    % 点格納
+    % 点格納（各ゾーンをそれぞれの格子サイズで独立に生成）
     % -----------------------
-    pos_bz = zeros(n_x*n_y, 2);
-    pos_gz = zeros(n_x*n_y, 2);
-    pos_dz = zeros(n_x*n_y, 2);
-
+    pos_bz = zeros(n_x_bz*n_y_bz, 2);
     n = 0;
     for x_idx = 1:length(bz_x)
         for y_idx = 1:length(bz_y)
             n = n + 1;
-            % BZ（左）
             pos_bz(n,:) = [bz_x(x_idx) + bz_center(1), bz_y(y_idx) + bz_center(2)];
-            % GZ（中央）
-            pos_gz(n,:) = [bz_x(x_idx) + gz_center(1), bz_y(y_idx) + gz_center(2)];
-            % DZ（右）
-            pos_dz(n,:) = [bz_x(x_idx) + dz_center(1), bz_y(y_idx) + dz_center(2)];
         end
     end
-    
+
+    pos_gz = zeros(n_x_gz*n_y_gz, 2);
+    n = 0;
+    for x_idx = 1:length(gz_x)
+        for y_idx = 1:length(gz_y)
+            n = n + 1;
+            pos_gz(n,:) = [gz_x(x_idx) + gz_center(1), gz_y(y_idx) + gz_center(2)];
+        end
+    end
+
+    pos_dz = zeros(n_x_dz*n_y_dz, 2);
+    n = 0;
+    for x_idx = 1:length(dz_x)
+        for y_idx = 1:length(dz_y)
+            n = n + 1;
+            pos_dz(n,:) = [dz_x(x_idx) + dz_center(1), dz_y(y_idx) + dz_center(2)];
+        end
+    end
+
     % BZ, GZ, DZを結合し、総マイク数を算出
     pos_mic = [pos_bz; pos_gz; pos_dz];
     num_mic = size(pos_mic, 1);

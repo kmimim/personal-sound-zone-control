@@ -58,13 +58,30 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         min_x_gz = min(mic_geo(gz_idx_start:gz_idx_end, 1));
         max_x_gz = max(mic_geo(gz_idx_start:gz_idx_end, 1));
 
-        % 減衰の急峻さを制御するパラメータ (大きいほど急速に落ちる)
-        alpha = 5.0; 
+        % GZ幅が実質0(x方向の制御点が1列だけ等)だと、下のtの計算が
+        % 0/0 = NaN になり、全スピーカーの駆動信号がエラーなくNaN化して
+        % しまう。「GZ幅を狭める」検討をする際に踏みやすい落とし穴なので、
+        % ここで明示的に検出して止める。
+        if (max_x_gz - min_x_gz) < eps
+            error('filter_pm:degenerateGZ', ...
+                'GZのx方向の幅が実質0です。gz_size(1)がitv_mic(1)に対して小さすぎる可能性があります。pos_sp_mic.m側の設定を見直してください。');
+        end
 
-        % GZ全体(BZ側 t=0 ～ DZ側 t=1)を通して目標音圧・重みを単調に遷移させる。
-        % 旧実装ではGZ前半後半で場合分けしており、前半末尾で重みが500まで
-        % 上がった直後に後半で100へ急落する不連続（谷）が生じていたため統一した。
-        % 振幅は前半のみだった減衰域をGZ全体に広げ、DZ境界でほぼ0(-87dB)に収束させる。
+        % GZ内で目標(dB)を滑らかに遷移させるためのパラメータ。
+        %   floor_dB : GZ→DZ境界で到達させる相対音圧レベル[dB]。
+        %              現時点では暫定値。心理音響閾値(JND)フェーズで、
+        %              JNDから逆算した「GZ幅で許容できる減衰量」に置き換える。
+        %
+        % 境界(t=0, t=1)で勾配がゼロになるスムーズステップ関数 s(t) を使い、
+        % BZ(勾配0の一定値)・DZ(勾配0の一定値=0)との接続点にキンク
+        % (勾配の不連続)が生じないようにする。
+        % 旧実装(振幅を指数減衰=dBで直線的に減衰)は、BZ境界で勾配が
+        % 0 → 約-87dB/GZ幅へ不連続にジャンプしており、これがPM解が
+        % 名目上の境界より手前からなだらかに音圧を落とし始める一因になって
+        % いたと考えられる。また目標がGZ→DZ境界で-87dBという実現困難な
+        % 深さを要求していた点も、floor_dBを現実的な値にすることで緩和する。
+        floor_dB = -40.0;
+
         for i = gz_idx_start:gz_idx_end
             x_m = mic_geo(i,1);
             y_m = mic_geo(i,2);
@@ -72,13 +89,16 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
             % 0 (BZ側) ～ 1 (DZ側) に正規化した位置パラメータ t
             t = (x_m - min_x_gz) / (max_x_gz - min_x_gz);
 
-            % 1. 目標音圧をGZ全体で指数的に減衰: 1.0 -> 約4.5e-5 (約 -87dB、実質0)
-            amp_g = amp_src * exp(-2 * alpha * t);
+            % 両端(t=0, t=1)で微分ゼロのスムーズステップ (Hermite smoothstep)
+            s = 3*t.^2 - 2*t.^3;
+
+            % 1. 目標音圧をdB領域で滑らかにfloor_dBまで遷移させる
+            amp_g = amp_src * 10^(floor_dB * s / 20);
             p_des(i) = amp_g * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave)));
 
-            % 2. 重みをGZ全体で対数スケールで単調増加: 1.0 -> 100.0
+            % 2. 重みも同じsを使い対数スケールで単調増加: 1.0 -> 100.0
             %    DZ側の重み(100.0)と連続的に接続する
-            log_w = log10(1.0) + t * (log10(100.0) - log10(1.0));
+            log_w = log10(1.0) + s * (log10(100.0) - log10(1.0));
             w_vec(i) = 10^(log_w);
         end
 

@@ -23,6 +23,28 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
     dz_x = linspace(-dz_size(1)/2, dz_size(1)/2, n_x_dz);
     dz_y = linspace(-dz_size(2)/2, dz_size(2)/2, n_y_dz);
 
+    % GZ幅(などゾーン幅)をitv_mic(1)に対して狭くしすぎると、x方向の
+    % 格子点数が1点まで減り、filter_pm.m 内の正規化位置t計算が0/0=NaNに
+    % なって全チャンネルが壊れる。エラーメッセージなしで壊れると原因が
+    % わかりにくいため、ここで事前に検出する。
+    % 2点未満は即エラー、5点未満(目安)は「遷移形状を表現するには粗い」
+    % 警告のみ出して処理は続行する。
+    min_pts_hard = 2;
+    min_pts_soft = 5;
+    zone_names = {'BZ', 'GZ', 'DZ'};
+    n_x_list   = [n_x_bz, n_x_gz, n_x_dz];
+    for zi = 1:3
+        if n_x_list(zi) < min_pts_hard
+            error('pos_sp_mic:degenerateZone', ...
+                '%s のx方向格子点数が%dしかありません。zoneの幅をitv_mic(1)に対して広げるか、itv_mic(1)を細かくしてください。', ...
+                zone_names{zi}, n_x_list(zi));
+        elseif n_x_list(zi) < min_pts_soft
+            warning('pos_sp_mic:coarseZone', ...
+                '%s のx方向格子点数が%d点しかありません(目安: %d点以上)。遷移形状を細かく表現できていない可能性があります。', ...
+                zone_names{zi}, n_x_list(zi), min_pts_soft);
+        end
+    end
+
     % -----------------------
     % 各ゾーンのシフト後中心位置
     % BZを左、GZを中央、DZを右に配置。

@@ -10,6 +10,21 @@ c = 340;% 音速 [m/s]
 k_list = 2*pi*freq_list/c;
 f_len = length(freq_list);
 
+%% -------------------------------------------------------------------------
+%% 心理音響閾値パラメータ (Phase 2)
+%% -------------------------------------------------------------------------
+% GZの「なめらかさ」を文献値から定量的に定義するための3つの仮定。
+% ここを書き換えるだけで感度分析ができるよう、main.mの先頭にまとめている。
+delta_JND = 1.0;    % 音圧レベル弁別閾 [dB]
+                     % (Jesteadt, Wier, & Green, 1977, JASA; Stellmack, Viemeister,
+                     %  & Byrne, 2004, JASA により、広帯域信号ではレベル非依存の
+                     %  一定値として扱ってよいとの根拠あり)
+tau = 0.050;         % ラウドネスの時間積分定数 [s] (release/BZ->DZ方向を採用)
+                     % (Moore, 2014, Trends in Hearing; Glasberg & Moore, 2002)
+v_walk = 1.31;       % 想定歩行速度 [m/s] (usual pace)
+                     % (Outdoor walking speeds of apparently healthy adults:
+                     %  A systematic review and meta-analysis, Sports Medicine, 2020)
+
 % グラフ描画のフラグ
 pltPos = true;    % pltPos = スピーカーとマイクの配置図
 pltSPL = true;    % pltSPL = 空間全体の音圧レベル分布図
@@ -35,6 +50,23 @@ dz_size = [1.0, 2.0];     % Dzの大きさ [幅(x), 奥行き(y)] [m]
 % 制御点（マイク）の配置間隔 [x方向, y方向]
 itv_mic = [0.04, 0.08];
 
+%% -------------------------------------------------------------------------
+%% 心理音響閾値からfloor_dBを算出 (Phase 2)
+%% -------------------------------------------------------------------------
+% slope_max_dBps : 許容される音圧変化率 [dB/s]。歩行速度に依存しない
+%                  (耳の時間積分特性そのもの)。
+% slope_max_space: それを歩行速度で空間側 [dB/m] に変換したもの。
+%                  歩くのが速いほど、同じ滑らかさを保つための許容勾配は厳しくなる。
+% floor_dB_max   : 現在のGZ幅(gz_size(1))で、心理音響的に正当化できる
+%                  最大減衰量 [dB]。1.5はスムーズステップのピーク勾配/平均勾配比
+%                  (境界だけでなくGZ内のどの点でも閾値を超えないようにするための補正)。
+slope_max_dBps  = delta_JND / tau;
+slope_max_space = slope_max_dBps / v_walk;
+floor_dB_max    = -slope_max_space * gz_size(1) / 1.5;
+
+fprintf("JND設計: slope_max=%.1fdB/s, GZ幅=%.2fm -> floor_dB_max=%.2fdB\n", ...
+    slope_max_dBps, gz_size(1), floor_dB_max);
+
 [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, zone_h, dist_zone, bz_size, gz_size, dz_size, itv_mic, room_size, pltPos);
 
 %% -------------------------------------------------------------------------
@@ -47,7 +79,7 @@ itv_mic = [0.04, 0.08];
 %% -------------------------------------------------------------------------
 % G_ctrl : 伝達関数行列[64マイク × 32スピーカー × 1周波数]
 G_ctrl = IR_freefield(pos_mic, pos_sp, k_list);
-drv = filter_pm(pos_mic, G_ctrl, freq_list, ang_wave, amp_src, Nsrc, c, num_bz, num_gz);
+drv = filter_pm(pos_mic, G_ctrl, freq_list, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, floor_dB_max);
 
 %% -------------------------------------------------------------------------
 %% 制御結果の評価
@@ -93,4 +125,12 @@ fprintf("f=%d-%dHz, num_sp=%d, num_mic=%d, AC=%.3fdB\n", freq_list(1), freq_list
 % 同じ pltSPL フラグで連動させる（pltSPL=falseのときに未定義変数エラーになるのを防ぐ）
 if pltSPL
     run plot_spl_profile.m
+
+    % 心理音響閾値による滑らかさの検証 (Phase 2)
+    % 設計目標(floor_dB_max)通りに実現されているとは限らない(PMは最小二乗解のため)。
+    % 実際に計算された spl_profile / x に対して、同じ delta_JND, tau, v_walk で
+    % 事後チェックする。
+    r = eval_jnd_smoothness(spl_profile, x, v_walk, delta_JND, tau);
+    fprintf("JND評価: 最大変化率=%.1fdB/s (閾値%.1fdB/s), 違反区間=%.1f%%, 違反指数=%.2f\n", ...
+        max(abs(r.slope_dBps)), r.slope_max_dBps, r.viol_ratio*100, r.viol_index);
 end

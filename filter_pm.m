@@ -1,4 +1,4 @@
-function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz)
+function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, floor_dB)
 
     % この実装は p_des(i) への線形インデックス代入をしているため、
     % Nsrc > 1 (複数の目標音源/波を同時に与える場合) では正しく動作しない。
@@ -67,10 +67,11 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
                 'GZのx方向の幅が実質0です。gz_size(1)がitv_mic(1)に対して小さすぎる可能性があります。pos_sp_mic.m側の設定を見直してください。');
         end
 
-        % GZ内で目標(dB)を滑らかに遷移させるためのパラメータ。
+        % GZ内で目標(dB)を滑らかに遷移させる。
         %   floor_dB : GZ→DZ境界で到達させる相対音圧レベル[dB]。
-        %              現時点では暫定値。心理音響閾値(JND)フェーズで、
-        %              JNDから逆算した「GZ幅で許容できる減衰量」に置き換える。
+        %              main.m で δ_JND, τ, v_walk と現在のGZ幅から算出され、
+        %              引数として渡されたものをそのまま使う(このファイルは
+        %              floor_dBがどう決まったかを一切知らない)。
         %
         % 境界(t=0, t=1)で勾配がゼロになるスムーズステップ関数 s(t) を使い、
         % BZ(勾配0の一定値)・DZ(勾配0の一定値=0)との接続点にキンク
@@ -80,7 +81,6 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         % 名目上の境界より手前からなだらかに音圧を落とし始める一因になって
         % いたと考えられる。また目標がGZ→DZ境界で-87dBという実現困難な
         % 深さを要求していた点も、floor_dBを現実的な値にすることで緩和する。
-        floor_dB = -40.0;
 
         for i = gz_idx_start:gz_idx_end
             x_m = mic_geo(i,1);

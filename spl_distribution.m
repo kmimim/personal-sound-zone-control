@@ -29,9 +29,14 @@ for n = 1:f_len
     p_t(:,n) = g_t * drv(:,n);  % 伝達関数にスピーカーの駆動信号（drv）を掛け合わせて、実際の合成音圧を算出
 end
 
-% 複素音圧の絶対値の二乗（音のエネルギー）を計算し、常用対数を用いてデシベル（dB）スケールに変換
-% ※これにより、人間が耳で感じる音の大きさに近い音圧レベル（SPL）の分布が得られます
-p_t_dB = 10 * log10(sum(abs(p_t).^2, 2));
+% 各周波数を等しい重みとして二乗振幅を合算し、BZ制御点の平均合算エネルギーを
+% 0 dB基準とする。絶対SPLではなく、モデル内の相対広帯域レベルとして扱う。
+bz_ref_power = mean(sum(abs(p_ctrl(1:num_bz, :)).^2, 2));
+if ~isfinite(bz_ref_power) || bz_ref_power <= 0
+    error('spl_distribution:invalidReferencePower', ...
+        'BZ制御点の基準エネルギーが有限の正値ではありません。音場計算を確認してください。');
+end
+p_t_dB = 10 * log10(sum(abs(p_t).^2, 2) / bz_ref_power);
 
 %% -------------------------------------------------------------------------
 %% 3. グラフに描画する各ゾーンの「四角い枠線」のコーナー座標計算
@@ -41,22 +46,18 @@ pos_bz = pos_mic(1:num_bz, :);
 pos_gz = pos_mic(num_bz+1 : num_bz+num_gz, :);
 pos_dz = pos_mic(num_bz+num_gz+1:end, :);
 
-offset = 0.01;
-
-% 各ゾーンの最小・最大座標を取得し、オフセットを適用してわずかに内側に縮める
-bx_min = min(pos_bz(:,1)) + offset; bx_max = max(pos_bz(:,1)) - offset;
-by_min = min(pos_bz(:,2)) + offset; by_max = max(pos_bz(:,2)) - offset;
-
-gx_min = min(pos_gz(:,1)) + offset; gx_max = max(pos_gz(:,1)) - offset;
-gy_min = min(pos_gz(:,2)) + offset; gy_max = max(pos_gz(:,2)) - offset;
-
-dx_min = min(pos_dz(:,1)) + offset; dx_max = max(pos_dz(:,1)) - offset;
-dy_min = min(pos_dz(:,2)) + offset; dy_max = max(pos_dz(:,2)) - offset;
-
-% 補正した座標で、それぞれの四角形のコーナー座標を構築（5つの角で始点に戻る）
-con_bz = [bx_min, by_min; bx_min, by_max; bx_max, by_max; bx_max, by_min; bx_min, by_min];
-con_gz = [gx_min, gy_min; gx_min, gy_max; gx_max, gy_max; gx_max, gy_min; gx_min, gy_min];
-con_dz = [dx_min, dy_min; dx_min, dy_max; dx_max, dy_max; dx_max, dy_min; dx_min, dy_min];
+if strcmp(geometry_mode, "referenceL")
+    con_bz = [];
+    con_dz = [];
+else
+    offset = 0.01;
+    bx_min = min(pos_bz(:,1)) + offset; bx_max = max(pos_bz(:,1)) - offset;
+    by_min = min(pos_bz(:,2)) + offset; by_max = max(pos_bz(:,2)) - offset;
+    dx_min = min(pos_dz(:,1)) + offset; dx_max = max(pos_dz(:,1)) - offset;
+    dy_min = min(pos_dz(:,2)) + offset; dy_max = max(pos_dz(:,2)) - offset;
+    con_bz = [bx_min, by_min; bx_min, by_max; bx_max, by_max; bx_max, by_min; bx_min, by_min];
+    con_dz = [dx_min, dy_min; dx_min, dy_max; dx_max, dy_max; dx_max, dy_min; dx_min, dy_min];
+end
 
 %% -------------------------------------------------------------------------
 %% 4. 音圧分布図のプロットと画像保存
@@ -99,12 +100,19 @@ axis xy; % imagesc特有の上下反転を直し、座標の向きを正常化�
 
 h2 = scatter(pos_sp(:,1), pos_sp(:,2), 15, 'k', '^', 'filled'); hold on;
 % ③ エリアの点線を見やすい色（シアンと白）、細い破線（LineWidth: 0.8）に変更
-h4 = plot(con_bz(:,1), con_bz(:,2), 'c--', 'LineWidth', 0.8); hold on;
-h5 = plot(con_dz(:,1), con_dz(:,2), 'w--', 'LineWidth', 0.8); hold off;
+if strcmp(geometry_mode, "referenceL")
+    scatter(pos_bz(:,1), pos_bz(:,2), 50, 'r', 'filled');
+    scatter(pos_dz(:,1), pos_dz(:,2), 20, 'w', 'filled', 'MarkerEdgeColor', 'k');
+else
+    plot(con_bz(:,1), con_bz(:,2), 'c--', 'LineWidth', 0.8); hold on;
+    plot(con_dz(:,1), con_dz(:,2), 'w--', 'LineWidth', 0.8);
+end
+hold off;
 % グラフの装飾設定
 xlabel("x[m]"); ylabel("y[m]"); % 軸のラベル
 colorbar                        % 画面右側に音圧の大きさと色の対応を示すカラーバーを表示
 caxis([-60 15])                 % （コメントアウト：カラーバーの最小値・最大値を固定したい場合に使用）
+title('Relative broadband level (mean BZ control-point energy = 0 dB)');
 daspect([1 1 1])                % 空間の縦横比（アスペクト比）を 1:1 に固定
 
 % 表示範囲ををピクセルの「端」ぴったりに合わせる

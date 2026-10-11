@@ -14,10 +14,14 @@ spl_profile = P_matrix(y_idx, :);
 % 新しいグラフウィンドウを開く
 figure;
 
-% 各ゾーンのx方向の境界を取得 (すでに計算済みの con_bz, con_gz, con_dz を利用)
-bz_x_min = min(con_bz(:,1)); bz_x_max = max(con_bz(:,1));
-gz_x_min = min(con_gz(:,1)); gz_x_max = max(con_gz(:,1)); % ★ここを追加しました
-dz_x_min = min(con_dz(:,1)); dz_x_max = max(con_dz(:,1));
+% 評価には制御点の実座標を使う。con_*は図示用に内側へ縮めてあるため、
+% そこから境界を取ると傾き・キンクの評価位置が物理境界からずれる。
+pos_bz = pos_mic(1:num_bz, :);
+pos_gz = pos_mic(num_bz+1:num_bz+num_gz, :);
+pos_dz = pos_mic(num_bz+num_gz+1:end, :);
+bz_x_min = min(pos_bz(:,1)); bz_x_max = max(pos_bz(:,1));
+gz_x_min = min(pos_gz(:,1)); gz_x_max = max(pos_gz(:,1));
+dz_x_min = min(pos_dz(:,1)); dz_x_max = max(pos_dz(:,1));
 
 % Y軸の描画範囲を設定
 y_min_plot = min(spl_profile) - 5;
@@ -41,12 +45,12 @@ patch([dz_x_min dz_x_max dz_x_max dz_x_min], ...
 
 % 4. 音圧プロファイルの折れ線グラフ
 plot(x, spl_profile, '-','Color', [0, 0, 0.5], 'LineWidth', 1.5, ...
-    'DisplayName', sprintf('SPL Profile (y = %.2f m)', actual_y));
+    'DisplayName', sprintf('Relative level (y = %.2f m)', actual_y));
 
 % グラフの装飾設定
 xlabel('x [m]');
-ylabel('Sound Pressure Level [dB]');
-title(sprintf('x-direction SPL Profile at y = %.2f m', actual_y));
+ylabel('Relative broadband level [dB re mean BZ energy]');
+title(sprintf('x-direction relative level at y = %.2f m', actual_y));
 
 % 表示範囲とグリッドの設定
 xlim([room_size(1), room_size(2)]);

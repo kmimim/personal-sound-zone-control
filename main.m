@@ -14,8 +14,6 @@ f_len = length(freq_list);
 pltPos = true;    % pltPos = スピーカーとマイクの配置図
 pltSPL = true;    % pltSPL = 空間全体の音圧レベル分布図
 
-mthd_ctrl = "wpm"; % 音場制御の手法 = PM法
-
 %% -------------------------------------------------------------------------
 %% 空間および制御ゾーンの設定
 %% -------------------------------------------------------------------------
@@ -54,8 +52,21 @@ dz_size = [1.5, 1.0];     % Dzの大きさ [幅(x), 奥行き(y)] [m]
 
 % 制御点（マイク）の配置間隔 [x方向, y方向]
 itv_mic = [0.04, 0.08];
+itv_sp = 0.085;           % スピーカー間隔 [m]
 
-[pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, zone_h, dist_zone, bz_size, gz_size, dz_size, itv_mic, room_size, pltPos);
+% "zones": 現行のBZ/GZ/DZ配置
+% "referenceL": placement.pdf と同じ部屋・再生点・L字抑圧点・スピーカー配置
+geometry_mode = "zones";
+if strcmp(geometry_mode, "referenceL")
+    room_size = [-1.5, 1.5, 0, 3.0];
+    num_sp = 32;
+    zone_h = 1.0;
+    dist_zone = 2.0;
+    itv_sp = 0.05;
+end
+
+[pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic( ...
+    num_sp, zone_h, dist_zone, bz_size, gz_size, dz_size, itv_mic, room_size, pltPos, geometry_mode, itv_sp);
 
 %% -------------------------------------------------------------------------
 %% 自由空間の伝達関数計算
@@ -84,21 +95,19 @@ p_bz = p_ctrl(1:num_bz, :);
 p_gz = p_ctrl(num_bz + 1:num_bz + num_gz, :);
 p_dz = p_ctrl(num_bz + num_gz + 1:end, :);
 
-% 広帯域全体のAC (空間と周波数のすべてのエネルギーを合算)
-% p_bz(:) とすることで、行列内の全要素を1つの列ベクトルにして一気に計算します
-AC_total = 10 * log10( sum(abs(p_bz(:)).^2) / sum(abs(p_dz(:)).^2) );
+% BZ/DZそれぞれの平均エネルギー比。ゾーンの制御点数が異なる設定でも
+% 点数の差がAC値に混入しないよう、合計ではなく平均を比較する。
+AC_total = 10 * log10(mean(abs(p_bz(:)).^2) / mean(abs(p_dz(:)).^2));
 
 fprintf("Broadband: %d-%dHz, AC=%.3fdB\n", freq_list(1), freq_list(end), AC_total);
-
-% 各マイク位置における音圧レベル（SPL）をdBスケールに変換
-SPL_ctrl = 10 * log10(abs(p_ctrl).^2);
 
 %% -------------------------------------------------------------------------
 %% 空間全体の音圧分布図の作成と結果表示
 %% -------------------------------------------------------------------------
 % 保存する画像ファイル名の生成
 % 画像ファイル名の設定
-map_name = sprintf("SPL_Broadband_%d-%dHz_AC=%.2f.png", freq_list(1), freq_list(end), AC_total);
+map_name = sprintf("Relative_%s_Broadband_%d-%dHz_AC=%.2f.png", ...
+    geometry_mode, freq_list(1), freq_list(end), AC_total);
 y_center = zone_h;
 
 % pltSPL フラグが宣言のみで未使用だったため、ここで実際にON/OFFを反映させる
@@ -111,7 +120,7 @@ fprintf("f=%d-%dHz, num_sp=%d, num_mic=%d, AC=%.3fdB\n", freq_list(1), freq_list
 
 % plot_spl_profile.m は spl_distribution.m が作る P_matrix/x/y/con_bz等に依存するため、
 % 同じ pltSPL フラグで連動させる（pltSPL=falseのときに未定義変数エラーになるのを防ぐ）
-if pltSPL
+if pltSPL && num_gz > 0
     run plot_spl_profile.m
 end
 
@@ -126,8 +135,8 @@ end
 % 文字列として受け取りstr2doubleで数値化する（evalを回避）。
 x_target = str2double(input('聴取点の x 座標 [m] を入力してください: ', 's'));
 y_target = str2double(input('聴取点の y 座標 [m] を入力してください: ', 's'));
-if isnan(x_target) || isnan(y_target)
-    error('main:invalidInput', '座標には数値を入力してください。');
+if ~isfinite(x_target) || ~isfinite(y_target)
+    error('main:invalidInput', '座標には有限の数値を入力してください。');
 end
 
 %% 2. 指定座標がBZ/GZ/DZのどこにあるか判定
@@ -135,11 +144,15 @@ pos_bz_pt = pos_mic(1:num_bz, :);
 pos_gz_pt = pos_mic(num_bz+1 : num_bz+num_gz, :);
 pos_dz_pt = pos_mic(num_bz+num_gz+1 : end, :);
 
-in_zone = @(p, pt) (pt(1) >= min(p(:,1)) && pt(1) <= max(p(:,1)) && ...
+in_zone = @(p, pt) (~isempty(p) && pt(1) >= min(p(:,1)) && pt(1) <= max(p(:,1)) && ...
                      pt(2) >= min(p(:,2)) && pt(2) <= max(p(:,2)));
 
 if in_zone(pos_bz_pt, [x_target, y_target])
     zone_label = "Bright Zone (BZ)";
+elseif strcmp(geometry_mode, "referenceL") && ...
+        ((abs(y_target - 0.10) <= 0.02 && x_target >= 0 && x_target <= 1.0) || ...
+         (abs(x_target) <= 0.02 && y_target >= 0.14 && y_target <= 1.60))
+    zone_label = "Dark control line (L)";
 elseif in_zone(pos_gz_pt, [x_target, y_target])
     zone_label = "Gradation Zone (GZ)";
 elseif in_zone(pos_dz_pt, [x_target, y_target])
@@ -163,8 +176,10 @@ end
 % サンプリングレート・ビット深度・チャンネル数は毎回入力させず、
 % 以下の固定値を使用する（録音環境に合わせてここを書き換えてください）。
 fs_audio    = 8000;   % サンプリングレート [Hz]
-bit_depth   = 16;     % ビット深度 (16bit固定)
 n_channels  = 2;       % チャンネル数 (1: モノラル, 2: ステレオ)
+if ~isscalar(n_channels) || ~isfinite(n_channels) || n_channels < 1 || n_channels ~= fix(n_channels)
+    error('main:invalidChannelCount', 'n_channelsには1以上の整数を指定してください。');
+end
 
 raw_type = 'int16';   % bit_depth=16 に対応する読み込み型
 max_val  = 2^15;       % 16bit符号付き整数のフルスケール値
@@ -177,6 +192,14 @@ if fid == -1
 end
 raw_data = fread(fid, Inf, raw_type);
 fclose(fid);
+if isempty(raw_data)
+    error('main:emptyInput', '入力音声ファイルにPCMデータがありません。');
+end
+if mod(numel(raw_data), n_channels) ~= 0
+    error('main:incompleteFrame', ...
+        '入力音声のサンプル数がチャンネル数(%d)で割り切れません。RAW形式とチャンネル数を確認してください。', ...
+        n_channels);
+end
 
 % チャンネル数に応じてインターリーブを分離し、多チャンネルはモノラル化
 if n_channels > 1
@@ -199,11 +222,20 @@ neg_idx = freq_bins > fs_audio/2;
 freq_signed(neg_idx) = freq_bins(neg_idx) - fs_audio;
 
 % freq_list(500-2000Hz)の範囲外は音場制御が行われていないため0とする(帯域制限)。
-% 正の周波数側はH_sys_designを線形補間、負の周波数側は複素共役で埋め実信号を保証する。
+% 複素応答を直接補間すると、位相回転の大きい周波数間で振幅が不自然に落ちるため、
+% 振幅とアンラップした位相を別々に補間する。負周波数側は複素共役にして実信号を保証する。
 H_full = zeros(N_audio, 1);
 pos_f_idx = freq_signed >= 0;
-H_full(pos_f_idx)  = interp1(freq_list, H_sys_design, freq_signed(pos_f_idx), 'linear', 0);
-H_full(~pos_f_idx) = conj(interp1(freq_list, H_sys_design, -freq_signed(~pos_f_idx), 'linear', 0));
+mag_design = abs(H_sys_design);
+phase_design = unwrap(angle(H_sys_design));
+freq_pos = freq_signed(pos_f_idx);
+freq_neg = -freq_signed(~pos_f_idx);
+mag_pos = interp1(freq_list, mag_design, freq_pos, 'linear', 0);
+phase_pos = interp1(freq_list, phase_design, freq_pos, 'linear', 0);
+mag_neg = interp1(freq_list, mag_design, freq_neg, 'linear', 0);
+phase_neg = interp1(freq_list, phase_design, freq_neg, 'linear', 0);
+H_full(pos_f_idx)  = mag_pos .* exp(1i * phase_pos);
+H_full(~pos_f_idx) = conj(mag_neg .* exp(1i * phase_neg));
 
 Yf = Xf .* H_full;
 y_out = real(ifft(Yf));

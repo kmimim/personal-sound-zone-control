@@ -5,7 +5,14 @@ Nsrc = 1;         % 制御目標とする仮想的な音源の数（ここでは
 ang_wave = pi/2;  % 音波が進んでくる方向 [rad]（pi/2 = 90度：真下から真上へ進む平面波）
 amp_src = ones(1,Nsrc); % 仮想音源の振幅（1 = 基準振幅として設定）
 
-freq_list = 500:100:2000;
+% 時間領域化で使うFFTと設計周波数を同じビンに合わせる。
+fs_audio  = 8000;   % 入力音声のサンプリングレート [Hz]
+L_fir     = 512;    % FIR長。周波数ビン間隔 fs_audio/L_fir = 15.625 Hz
+tau_model = 0.008;  % 因果化のためのモデリング遅延 [s] (8kHzで64サンプル)
+f_low     = 500;
+f_high    = 2000;
+bin_idx   = ceil(f_low*L_fir/fs_audio - 1e-9) : floor(f_high*L_fir/fs_audio + 1e-9);
+freq_list = bin_idx * fs_audio / L_fir;
 c = 340;% 音速 [m/s]
 k_list = 2*pi*freq_list/c;
 f_len = length(freq_list);
@@ -78,7 +85,7 @@ end
 %% -------------------------------------------------------------------------
 % G_ctrl : 伝達関数行列[マイク数 × スピーカー数 × 周波数数]
 G_ctrl = IR_freefield(pos_mic, pos_sp, k_list);
-drv = filter_pm(pos_mic, G_ctrl, freq_list, ang_wave, amp_src, Nsrc, c, num_bz, num_gz);
+drv = filter_pm(pos_mic, G_ctrl, freq_list, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau_model);
 
 %% -------------------------------------------------------------------------
 %% 制御結果の評価
@@ -175,7 +182,6 @@ end
 % .raw はヘッダを持たないPCM生データのため audioread では読めない。
 % サンプリングレート・ビット深度・チャンネル数は毎回入力させず、
 % 以下の固定値を使用する（録音環境に合わせてここを書き換えてください）。
-fs_audio    = 8000;   % サンプリングレート [Hz]
 n_channels  = 2;       % チャンネル数 (1: モノラル, 2: ステレオ)
 if ~isscalar(n_channels) || ~isfinite(n_channels) || n_channels < 1 || n_channels ~= fix(n_channels)
     error('main:invalidChannelCount', 'n_channelsには1以上の整数を指定してください。');
@@ -211,34 +217,15 @@ else
 end
 x_audio = double(x_audio) / max_val;
 
-%% 5. FFT -> 指定座標の周波数応答H_sysを畳み込み -> 逆FFTで時間波形に戻す
-N_audio = length(x_audio);
-Xf = fft(x_audio);
+%% 5. 共通FFTビン上の応答から因果FIRを作り、入力と線形畳み込み
+% 設計帯域外はゼロ(500-2000Hzの帯域制限)。負周波数側を共役対称にする。
+H_spec = zeros(L_fir, 1);
+H_spec(bin_idx + 1) = H_sys_design(:);
+H_spec(L_fir - bin_idx + 1) = conj(H_sys_design(:));
+h_fir = real(ifft(H_spec));
 
-% 各FFTビンの周波数(正負を考慮)
-freq_bins = (0:N_audio-1)' * (fs_audio / N_audio);
-freq_signed = freq_bins;
-neg_idx = freq_bins > fs_audio/2;
-freq_signed(neg_idx) = freq_bins(neg_idx) - fs_audio;
-
-% freq_list(500-2000Hz)の範囲外は音場制御が行われていないため0とする(帯域制限)。
-% 複素応答を直接補間すると、位相回転の大きい周波数間で振幅が不自然に落ちるため、
-% 振幅とアンラップした位相を別々に補間する。負周波数側は複素共役にして実信号を保証する。
-H_full = zeros(N_audio, 1);
-pos_f_idx = freq_signed >= 0;
-mag_design = abs(H_sys_design);
-phase_design = unwrap(angle(H_sys_design));
-freq_pos = freq_signed(pos_f_idx);
-freq_neg = -freq_signed(~pos_f_idx);
-mag_pos = interp1(freq_list, mag_design, freq_pos, 'linear', 0);
-phase_pos = interp1(freq_list, phase_design, freq_pos, 'linear', 0);
-mag_neg = interp1(freq_list, mag_design, freq_neg, 'linear', 0);
-phase_neg = interp1(freq_list, phase_design, freq_neg, 'linear', 0);
-H_full(pos_f_idx)  = mag_pos .* exp(1i * phase_pos);
-H_full(~pos_f_idx) = conj(mag_neg .* exp(1i * phase_neg));
-
-Yf = Xf .* H_full;
-y_out = real(ifft(Yf));
+% 8msのモデリング遅延で応答を因果側へ移した後、循環ではなく線形畳み込みにする。
+y_out = conv(x_audio, h_fir);
 
 % 出力(y_out)自身のピークで正規化すると、座標ごとに異なるはずの
 % 音量(BZ/GZ/DZのコントラスト)が毎回0.95に均されて消えてしまう。

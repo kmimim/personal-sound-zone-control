@@ -1,4 +1,6 @@
-function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz)
+function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau)
+
+    if nargin < 10 || isempty(tau), tau = 0; end
 
     % この実装は p_des(i) への線形インデックス代入をしているため、
     % Nsrc > 1 (複数の目標音源/波を同時に与える場合) では正しく動作しない。
@@ -36,6 +38,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
 
     for kk = 1:f_len
         g = G(:,:,kk);
+        delay_phase = exp(-1i * 2*pi*f(kk) * tau);
 
         % 正則化パラメータの計算
         %
@@ -58,7 +61,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         for i = 1:num_bz
             x_m = mic_geo(i,1);
             y_m = mic_geo(i,2);
-            p_des(i) = amp_src * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave)));
+            p_des(i) = amp_src * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave))) * delay_phase;
             w_vec(i) = 1.0;
         end
 
@@ -96,7 +99,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
 
                 % 目標音圧をdB領域でfloor_dBまで遷移させる
                 amp_g = amp_src * 10^(floor_dB * s / 20);
-                p_des(i) = amp_g * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave)));
+                p_des(i) = amp_g * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave))) * delay_phase;
 
                 % 重みを対数スケールで単調増加させる: 1.0 -> 100.0
                 log_w = s * log10(100.0);

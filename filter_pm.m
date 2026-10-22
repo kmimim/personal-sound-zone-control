@@ -1,6 +1,17 @@
-function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau)
+function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau, floor_dB, dz_mode)
 
     if nargin < 10 || isempty(tau), tau = 0; end
+    % Defaults preserve compatibility with calls using the original signature.
+    if nargin < 11 || isempty(floor_dB), floor_dB = -20.0; end
+    if nargin < 12 || isempty(dz_mode), dz_mode = "zero"; end
+    if ~isscalar(floor_dB) || ~isfinite(floor_dB) || floor_dB > 0
+        error('filter_pm:invalidFloorDb', ...
+            'floor_dBには0以下の有限なスカラー値を指定してください。');
+    end
+    if ~any(strcmp(dz_mode, {"zero", "floor"}))
+        error('filter_pm:invalidDzMode', ...
+            'dz_modeには"zero"または"floor"を指定してください。');
+    end
 
     % この実装は p_des(i) への線形インデックス代入をしているため、
     % Nsrc > 1 (複数の目標音源/波を同時に与える場合) では正しく動作しない。
@@ -82,11 +93,6 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
                     'GZのx方向の幅が実質0です。gz_size(1)がitv_mic(1)に対して小さすぎる可能性があります。pos_sp_mic.m側の設定を見直してください。');
             end
 
-            % GZの目標音圧を滑らかに遷移させる暫定値 [dB]。
-            % DZの目標値は0なので、GZ右端の有限なfloor_dBとは一致しない。
-            % 共有境界を含む座標配置では競合するため、境界の扱いは要検討。
-            floor_dB = -40.0;
-
             for i = gz_idx_start:gz_idx_end
                 x_m = mic_geo(i,1);
                 y_m = mic_geo(i,2);
@@ -112,7 +118,17 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         %--------------------------------------------------
         dz_idx_start = num_bz + num_gz + 1;
         for i = dz_idx_start:n_mic
-            p_des(i) = 0;
+            if strcmp(dz_mode, "floor")
+                % GZ終端と同じ目標振幅・平面波位相をDZに与える。
+                x_m = mic_geo(i,1);
+                y_m = mic_geo(i,2);
+                amp_d = amp_src * 10^(floor_dB / 20);
+                p_des(i) = amp_d * exp(1i * (2*pi*f(kk)/c) * ...
+                    (x_m*cos(ang_wave) + y_m*sin(ang_wave))) * delay_phase;
+            else
+                % zero: DZ目標を0振幅にする。
+                p_des(i) = 0;
+            end
             w_vec(i) = 100.0;
         end
 

@@ -9,6 +9,8 @@ amp_src = ones(1,Nsrc); % 仮想音源の振幅（1 = 基準振幅として設�
 fs_audio  = 8000;   % 入力音声のサンプリングレート [Hz]
 L_fir     = 512;    % FIR長。周波数ビン間隔 fs_audio/L_fir = 15.625 Hz
 tau_model = 0.008;  % 因果化のためのモデリング遅延 [s] (8kHzで64サンプル)
+floor_dB = -20.0;    % BZ目標振幅(amp_src)基準のGZ/DZ floor目標 [dB]
+dz_mode = "floor";  % DZ目標: "zero" または "floor"
 f_low     = 500;
 f_high    = 2000;
 bin_idx   = ceil(f_low*L_fir/fs_audio - 1e-9) : floor(f_high*L_fir/fs_audio + 1e-9);
@@ -85,7 +87,8 @@ end
 %% -------------------------------------------------------------------------
 % G_ctrl : 伝達関数行列[マイク数 × スピーカー数 × 周波数数]
 G_ctrl = IR_freefield(pos_mic, pos_sp, k_list);
-drv = filter_pm(pos_mic, G_ctrl, freq_list, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau_model);
+drv = filter_pm(pos_mic, G_ctrl, freq_list, ang_wave, amp_src, Nsrc, c, ...
+    num_bz, num_gz, tau_model, floor_dB, dz_mode);
 
 %% -------------------------------------------------------------------------
 %% 制御結果の評価

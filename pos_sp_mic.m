@@ -101,6 +101,22 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
             end
         end
 
+        % ゾーン境界(BZ-GZ, GZ-DZ)では、隣り合うゾーンの端の制御点が同じ座標に重なる。
+        % 同じ点にBZ側とGZ側など別々の目標を重ねて与えると目標が食い違うため、
+        % 境界の点はGZ所属で1回だけ使い、BZ/DZ側の重複点を取り除く。
+        % (既定の配置では制御点が 1806点 -> 1778点 になる)
+        tol_dup = 1e-9;
+        keep_bz = true(size(pos_bz, 1), 1);
+        for i = 1:size(pos_bz, 1)
+            keep_bz(i) = ~any(abs(pos_gz(:,1) - pos_bz(i,1)) < tol_dup & abs(pos_gz(:,2) - pos_bz(i,2)) < tol_dup);
+        end
+        pos_bz = pos_bz(keep_bz, :);
+        keep_dz = true(size(pos_dz, 1), 1);
+        for i = 1:size(pos_dz, 1)
+            keep_dz(i) = ~any(abs(pos_gz(:,1) - pos_dz(i,1)) < tol_dup & abs(pos_gz(:,2) - pos_dz(i,2)) < tol_dup);
+        end
+        pos_dz = pos_dz(keep_dz, :);
+
         num_bz = size(pos_bz, 1);
         num_gz = size(pos_gz, 1);
     end

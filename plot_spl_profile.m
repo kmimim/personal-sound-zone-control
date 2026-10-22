@@ -22,13 +22,18 @@ pos_dz = pos_mic(num_bz+num_gz+1:end, :);
 bz_x_min = min(pos_bz(:,1)); bz_x_max = max(pos_bz(:,1));
 gz_x_min = min(pos_gz(:,1)); gz_x_max = max(pos_gz(:,1));
 dz_x_min = min(pos_dz(:,1)); dz_x_max = max(pos_dz(:,1));
+% 境界(BZ-GZ, GZ-DZ)の物理位置はGZの両端。境界の制御点はGZ所属で1回だけ使っているため、
+% BZ最端・DZ最端の制御点はGZ端の手前で終わる(bz_x_max < gz_x_min, dz_x_min > gz_x_max)。
+% 傾き・キンクの評価位置と図示の境界には、GZ端を使う。
+bnd_bz_gz = gz_x_min;
+bnd_gz_dz = gz_x_max;
 
 % Y軸の描画範囲を設定
 y_min_plot = min(spl_profile) - 5;
 y_max_plot = max(spl_profile) + 5;
 
 % 1. BZ領域 (シアン)
-patch([bz_x_min bz_x_max bz_x_max bz_x_min], ...
+patch([bz_x_min bnd_bz_gz bnd_bz_gz bz_x_min], ...
       [y_min_plot y_min_plot y_max_plot y_max_plot], ...
       'c', 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'DisplayName', 'Bright Zone');
 hold on;
@@ -39,7 +44,7 @@ patch([gz_x_min gz_x_max gz_x_max gz_x_min], ...
       'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Gradation Zone');
 
 % 3. DZ領域 (グレー)
-patch([dz_x_min dz_x_max dz_x_max dz_x_min], ...
+patch([bnd_gz_dz dz_x_max dz_x_max bnd_gz_dz], ...
       [y_min_plot y_min_plot y_max_plot y_max_plot], ...
       'k', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Dark Zone');
 
@@ -87,8 +92,8 @@ slope_gz_mean = mean(abs(dSPL_dx(gz_mask)));
 % 差が大きいほど「境界で急に変化の仕方が折れ曲がっている」ことを意味する。
 edge_win = 3; % 境界から何グリッド点分の傾きを平均するか
 
-% BZ-GZ境界（bz_x_max = gz_x_min 付近）
-idx_b2g = find(x_mid >= bz_x_max, 1, 'first');
+% BZ-GZ境界（GZの左端）
+idx_b2g = find(x_mid >= bnd_bz_gz - 1e-9, 1, 'first');
 if isempty(idx_b2g), idx_b2g = length(dSPL_dx); end
 i_lo = max(idx_b2g - edge_win, 1);
 i_hi = min(idx_b2g + edge_win - 1, length(dSPL_dx));
@@ -96,8 +101,8 @@ slope_bz_side       = mean(dSPL_dx(i_lo:idx_b2g-1));
 slope_gz_side_at_bz = mean(dSPL_dx(idx_b2g:i_hi));
 kink_bz_gz = abs(slope_gz_side_at_bz - slope_bz_side);
 
-% GZ-DZ境界（gz_x_max = dz_x_min 付近）
-idx_g2d = find(x_mid >= gz_x_max, 1, 'first');
+% GZ-DZ境界（GZの右端）
+idx_g2d = find(x_mid >= bnd_gz_dz - 1e-9, 1, 'first');
 if isempty(idx_g2d), idx_g2d = length(dSPL_dx); end
 i_lo = max(idx_g2d - edge_win, 1);
 i_hi = min(idx_g2d + edge_win - 1, length(dSPL_dx));

@@ -6,9 +6,9 @@ ang_wave = pi/2;  % 音波が進んでくる方向 [rad]（pi/2 = 90度：真下
 amp_src = ones(1,Nsrc); % 仮想音源の振幅（1 = 基準振幅として設定）
 
 % 時間領域化で使うFFTと設計周波数を同じビンに合わせる。
-fs_audio  = 8000;   % 入力音声のサンプリングレート [Hz]
-L_fir     = 512;    % FIR長。周波数ビン間隔 fs_audio/L_fir = 15.625 Hz
-tau_model = 0.008;  % 因果化のためのモデリング遅延 [s] (8kHzで64サンプル)
+fs_audio  = 16000;  % 入力音声(RAW)のサンプリングレート [Hz]
+L_fir     = 1024;   % FIR長。周波数ビン間隔 fs_audio/L_fir = 15.625 Hz（以前の8kHz・L=512と同じ設計周波数ビン）
+tau_model = 0.008;  % 因果化のためのモデリング遅延 [s] (16kHzで128サンプル)
 floor_dB = -20.0;    % BZ目標振幅(amp_src)基準のGZ/DZ floor目標 [dB]
 dz_mode = "floor";  % DZ目標: "zero" または "floor"
 f_low     = 500;
@@ -22,6 +22,13 @@ f_len = length(freq_list);
 % グラフ描画のフラグ
 pltPos = true;    % pltPos = スピーカーとマイクの配置図
 pltSPL = true;    % pltSPL = 空間全体の音圧レベル分布図
+
+% 二重音声と聴取音声の入出力設定（空 [] / "" の場合は実行時に対話入力）
+dual_mode  = true;    % true: 二重音声(音A:BZ左 + 音B:BZ右) / false: 音Aのみ
+listen_pts = [];      % 聴取点 [x, y] を行ごとに並べる。例: [-1.75 1.2; 0 1.2; 1.75 1.2]
+rawA_path  = "";      % 音声A(.raw)のパス
+rawB_path  = "";      % 音声B(.raw)のパス（dual_mode=true のとき使用）
+n_channels = 1;       % RAWのチャンネル数 (1: モノラル, 2: ステレオ→平均してモノ化)
 
 %% -------------------------------------------------------------------------
 %% 空間および制御ゾーンの設定
@@ -77,6 +84,15 @@ end
 [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic( ...
     num_sp, zone_h, dist_zone, bz_size, gz_size, dz_size, itv_mic, room_size, pltPos, geometry_mode, itv_sp);
 
+% 境界(x=±1m)の重複制御点は、pos_sp_mic.m の中で除去済み（GZ所属で1回だけ使う）。
+fprintf("制御点数: %d 点（BZ=%d, GZ=%d, DZ=%d）\n", num_mic, num_bz, num_gz, num_mic - num_bz - num_gz);
+
+% 二重音声は、BZ/DZを入れ替えた2つ目の音場が必要。GZが無い配置(referenceL)では使えない。
+use_dual = dual_mode && num_gz > 0 && strcmp(geometry_mode, "zones");
+if dual_mode && ~use_dual
+    warning('main:dualUnavailable', '現在の配置(geometry_mode=%s)では二重音声を作れないため、音Aのみで進めます。', geometry_mode);
+end
+
 %% -------------------------------------------------------------------------
 %% 自由空間の伝達関数計算
 %% -------------------------------------------------------------------------
@@ -89,6 +105,17 @@ end
 G_ctrl = IR_freefield(pos_mic, pos_sp, k_list);
 drv = filter_pm(pos_mic, G_ctrl, freq_list, ang_wave, amp_src, Nsrc, c, ...
     num_bz, num_gz, tau_model, floor_dB, dz_mode);
+
+% 音B: BZ点群とDZ点群を入れ替え、GZの遷移方向も反転して設計する（右に音を届け、左を抑圧）
+if use_dual
+    idx_bz = 1:num_bz;
+    idx_gz = num_bz+1 : num_bz+num_gz;
+    idx_dz = num_bz+num_gz+1 : num_mic;
+    idx_B  = [idx_dz, idx_gz, idx_bz];
+    num_bzB = numel(idx_dz);
+    G_ctrlB = G_ctrl(idx_B, :, :);
+    drvB = filter_pm(pos_mic(idx_B,:), G_ctrlB, freq_list, ang_wave, amp_src, Nsrc, c, num_bzB, num_gz, tau_model, floor_dB, dz_mode, true);
+end
 
 %% -------------------------------------------------------------------------
 %% 制御結果の評価
@@ -111,13 +138,29 @@ AC_total = 10 * log10(mean(abs(p_bz(:)).^2) / mean(abs(p_dz(:)).^2));
 
 fprintf("Broadband: %d-%dHz, AC=%.3fdB\n", freq_list(1), freq_list(end), AC_total);
 
+% 音Aの基準エネルギー（BZ平均、広帯域）。聴取点のレベル表示に使う。
+E_ref_A = mean(abs(p_bz(:)).^2) * f_len;
+
+if use_dual
+    p_ctrlB = zeros(num_mic, f_len);
+    for n = 1:f_len
+        p_ctrlB(:, n) = G_ctrlB(:,:,n) * drvB(:,n);
+    end
+    p_bzB = p_ctrlB(1:num_bzB, :);
+    p_dzB = p_ctrlB(num_bzB + num_gz + 1:end, :);
+    AC_B = 10 * log10(mean(abs(p_bzB(:)).^2) / mean(abs(p_dzB(:)).^2));
+    E_ref_B = mean(abs(p_bzB(:)).^2) * f_len;
+    fprintf("二重音声: 音A AC=%.3fdB, 音B AC=%.3fdB (floor_dB=%g, dz_mode=%s)\n", AC_total, AC_B, floor_dB, dz_mode);
+end
+
 %% -------------------------------------------------------------------------
 %% 空間全体の音圧分布図の作成と結果表示
 %% -------------------------------------------------------------------------
 % 保存する画像ファイル名の生成
 % 画像ファイル名の設定
-map_name = sprintf("Relative_%s_Broadband_%d-%dHz_AC=%.2f.png", ...
-    geometry_mode, freq_list(1), freq_list(end), AC_total);
+% 条件の違うファイルを上書きしないよう dz_mode と floor_dB も入れる。
+map_name = sprintf("Relative_%s_%s_floor%g_Broadband_%d-%dHz_AC=%.2f.png", ...
+    geometry_mode, dz_mode, floor_dB, freq_list(1), freq_list(end), AC_total);
 y_center = zone_h;
 
 % pltSPL フラグが宣言のみで未使用だったため、ここで実際にON/OFFを反映させる
@@ -135,112 +178,164 @@ if pltSPL && num_gz > 0
 end
 
 %% =====================================================================
-%% 追加機能: 任意座標での聴取音声の生成・再生・保存
+%% 追加機能: 指定した聴取点での聴取音声の生成・保存（二重音声 / 音Aのみ）
 %% (既存の音場制御・AC・SPL計算には一切手を加えない独立処理)
 %% =====================================================================
 
-%% 1. 聴取点座標をユーザーに入力させる
-% input()を引数なし(数値モード)で使うと入力文字列がevalされてしまい、
-% 空白や不正な文字列があるとスクリプト呼び出しエラーになるため、
+%% 1. 聴取点座標（listen_pts が空なら対話入力）
+% input()を数値モードで使うと入力文字列がevalされてしまうため、
 % 文字列として受け取りstr2doubleで数値化する（evalを回避）。
-x_target = str2double(input('聴取点の x 座標 [m] を入力してください: ', 's'));
-y_target = str2double(input('聴取点の y 座標 [m] を入力してください: ', 's'));
-if ~isfinite(x_target) || ~isfinite(y_target)
-    error('main:invalidInput', '座標には有限の数値を入力してください。');
+if isempty(listen_pts)
+    x_target = str2double(input('聴取点の x 座標 [m] を入力してください: ', 's'));
+    y_target = str2double(input('聴取点の y 座標 [m] を入力してください: ', 's'));
+    listen_pts = [x_target, y_target];
+end
+if size(listen_pts, 2) ~= 2 || any(~isfinite(listen_pts(:)))
+    error('main:invalidInput', '聴取点は有限の数値で [x, y] の行として指定してください。');
 end
 
-%% 2. 指定座標がBZ/GZ/DZのどこにあるか判定
+%% 2. 入力音声(RAW音声)の読み込み
+% .raw はヘッダを持たないPCM生データのため audioread では読めない。
+raw_type = 'int16';   % 16bit PCM
+max_val  = 2^15;      % 16bit符号付き整数のフルスケール値
+
+if isempty(rawA_path)
+    rawA_path = input('音声A(.raw)のパスを入力してください: ', 's');
+end
+x_A = read_raw_pcm(rawA_path, n_channels, raw_type, max_val);
+if use_dual
+    if isempty(rawB_path)
+        rawB_path = input('音声B(.raw)のパスを入力してください: ', 's');
+    end
+    x_B = read_raw_pcm(rawB_path, n_channels, raw_type, max_val);
+else
+    x_B = zeros(size(x_A));
+end
+
+% 長さが違えば短い方を0で埋める
+n_max = max(numel(x_A), numel(x_B));
+x_A(end+1:n_max, 1) = 0;
+x_B(end+1:n_max, 1) = 0;
+
+% 出力自身のピークで正規化すると座標ごとの音量差(BZ/GZ/DZのコントラスト)が消えてしまう。
+% そこで、指定した全聴取点の出力を一度すべて作り、その中の最大ピークが out_peak になるような
+% 「全座標共通の1つのスケール」をかける（座標間の相対的な音量差は保たれ、クリッピングも起きない）。
+% 二重音声では2つの音が足し合わさるため、入力のピークだけを基準にするとBZでも1を超えることがある。
+% ただし最大ピークを数えるのは、制御ゾーン(BZ/GZ/DZ)内の聴取点だけにする。スピーカー付近などゾーン外の点は
+% 音圧が大きくなりやすく、含めるとゾーン内のスケールが下がってしまうため。ゾーン外の点が1を超える場合は警告してクリップする。
+out_peak = 0.95;
+y_raw = cell(size(listen_pts, 1), 1);
+in_area = true(size(listen_pts, 1), 1);   % 聴取点が制御ゾーン内にあるか
+
 pos_bz_pt = pos_mic(1:num_bz, :);
 pos_gz_pt = pos_mic(num_bz+1 : num_bz+num_gz, :);
 pos_dz_pt = pos_mic(num_bz+num_gz+1 : end, :);
-
 in_zone = @(p, pt) (~isempty(p) && pt(1) >= min(p(:,1)) && pt(1) <= max(p(:,1)) && ...
                      pt(2) >= min(p(:,2)) && pt(2) <= max(p(:,2)));
+% ゾーン境界の点はGZ所属で1回だけ使っているため、BZ/DZ側の制御点の範囲はGZの手前で終わる。
+% 隙間(例: BZ最端の点とGZ端の間)に入った聴取点を「ゾーン外」と誤判定しないよう、
+% ゾーン判定用の矩形は隣のGZの端まで広げて取る。
+if num_gz > 0
+    gz_lo = min(pos_gz_pt(:,1));  gz_hi = max(pos_gz_pt(:,1));
+    box_bz = [min(pos_bz_pt(:,1)), gz_lo, min(pos_bz_pt(:,2)), max(pos_bz_pt(:,2))];
+    box_gz = [gz_lo, gz_hi, min(pos_gz_pt(:,2)), max(pos_gz_pt(:,2))];
+    box_dz = [gz_hi, max(pos_dz_pt(:,1)), min(pos_dz_pt(:,2)), max(pos_dz_pt(:,2))];
+    in_box = @(bx, pt) (pt(1) >= bx(1) && pt(1) <= bx(2) && pt(2) >= bx(3) && pt(2) <= bx(4));
+end
 
-if in_zone(pos_bz_pt, [x_target, y_target])
-    zone_label = "Bright Zone (BZ)";
-elseif strcmp(geometry_mode, "referenceL") && ...
-        ((abs(y_target - 0.10) <= 0.02 && x_target >= 0 && x_target <= 1.0) || ...
-         (abs(x_target) <= 0.02 && y_target >= 0.14 && y_target <= 1.60))
-    zone_label = "Dark control line (L)";
-elseif in_zone(pos_gz_pt, [x_target, y_target])
-    zone_label = "Gradation Zone (GZ)";
-elseif in_zone(pos_dz_pt, [x_target, y_target])
-    zone_label = "Dark Zone (DZ)";
+if use_dual, tag = "dual"; else, tag = "single"; end
+
+for ip = 1:size(listen_pts, 1)
+    x_target = listen_pts(ip, 1);
+    y_target = listen_pts(ip, 2);
+
+    %% 3. 指定座標がBZ/GZ/DZのどこにあるか判定
+    if use_dual
+        % 二重音声ではBZ(音A)の領域とDZ(音B)の領域が、それぞれ「自分の音の明るい側」になる
+        if in_box(box_gz, [x_target, y_target])
+            zone_label = "Gradation Zone (GZ: 両方の音が遷移)";
+        elseif in_box(box_bz, [x_target, y_target])
+            zone_label = "音Aの明るい側 (左ゾーン)";
+        elseif in_box(box_dz, [x_target, y_target])
+            zone_label = "音Bの明るい側 (右ゾーン)";
+        else
+            zone_label = "制御ゾーン外 (BZ/GZ/DZいずれにも属さない)";
+        end
+    elseif num_gz > 0
+        if in_box(box_gz, [x_target, y_target])
+            zone_label = "Gradation Zone (GZ)";
+        elseif in_box(box_bz, [x_target, y_target])
+            zone_label = "Bright Zone (BZ)";
+        elseif in_box(box_dz, [x_target, y_target])
+            zone_label = "Dark Zone (DZ)";
+        else
+            zone_label = "制御ゾーン外 (BZ/GZ/DZいずれにも属さない)";
+        end
+    elseif in_zone(pos_bz_pt, [x_target, y_target])
+        zone_label = "Bright Zone (BZ)";
+    elseif strcmp(geometry_mode, "referenceL") && ...
+            ((abs(y_target - 0.10) <= 0.02 && x_target >= 0 && x_target <= 1.0) || ...
+             (abs(x_target) <= 0.02 && y_target >= 0.14 && y_target <= 1.60))
+        zone_label = "Dark control line (L)";
+    elseif in_zone(pos_dz_pt, [x_target, y_target])
+        zone_label = "Dark Zone (DZ)";
+    else
+        zone_label = "制御ゾーン外 (BZ/GZ/DZいずれにも属さない)";
+    end
+    fprintf("指定座標 (x=%.3f, y=%.3f) は [%s] に位置します。\n", x_target, y_target, zone_label);
+    in_area(ip) = isempty(strfind(char(zone_label), '制御ゾーン外'));
+
+    %% 4. 指定座標-各スピーカー間の伝達関数と駆動信号から、その座標での周波数応答を求める
+    G_point = IR_freefield([x_target, y_target], pos_sp, k_list); % [1 x num_sp x f_len]
+
+    H_A = zeros(1, f_len);
+    H_B = zeros(1, f_len);
+    for n = 1:f_len
+        H_A(n) = G_point(:,:,n) * drv(:,n);
+        if use_dual
+            H_B(n) = G_point(:,:,n) * drvB(:,n);
+        end
+    end
+
+    % その点での各音のレベル（それぞれの明るい側のBZ平均を0 dBとした広帯域レベル）
+    L_A = 10 * log10(sum(abs(H_A).^2) / E_ref_A);
+    if use_dual
+        L_B = 10 * log10(sum(abs(H_B).^2) / E_ref_B);
+        fprintf("  レベル: 音A=%.1f dB, 音B=%.1f dB (差 %.1f dB)\n", L_A, L_B, L_A - L_B);
+    else
+        fprintf("  レベル: 音A=%.1f dB\n", L_A);
+    end
+
+    %% 5. 共通FFTビン上の応答から因果FIRを作り、入力と線形畳み込み
+    % 設計帯域外はゼロ(500-2000Hzの帯域制限)。8msのモデリング遅延で応答を因果側へ移してある。
+    h_A = spec_to_fir(H_A, bin_idx, L_fir);
+    y_out = conv(x_A, h_A);
+    if use_dual
+        h_B = spec_to_fir(H_B, bin_idx, L_fir);
+        y_out = y_out + conv(x_B, h_B);
+    end
+    y_raw{ip} = y_out;
+end
+
+%% 6. 共通スケールをかけてWAV保存 (自動再生はしない)
+peak_pts = cellfun(@(v) max(abs(v)), y_raw);
+peak_pts = peak_pts(:);
+if any(in_area)
+    peak_ref = max(peak_pts(in_area));      % ゾーン内の聴取点だけでスケールを決める
 else
-    zone_label = "制御ゾーン外 (BZ/GZ/DZいずれにも属さない)";
+    peak_ref = max(peak_pts);
 end
-fprintf("指定座標 (x=%.3f, y=%.3f) は [%s] に位置します。\n", x_target, y_target, zone_label);
-
-%% 3. 指定座標-各スピーカー間の伝達関数を計算し、既存drvと組み合わせて
-%%    その座標での周波数応答 H_sys(f) を求める (freq_listの各点のみ)
-G_point = IR_freefield([x_target, y_target], pos_sp, k_list); % [1 x num_sp x f_len]
-
-H_sys_design = zeros(1, f_len);
-for n = 1:f_len
-    H_sys_design(n) = G_point(:,:,n) * drv(:,n);
+norm_scale = out_peak / (peak_ref + eps);
+fprintf("全聴取点共通のスケール: %.4f (ゾーン内の最大ピーク %.4f -> %.2f)\n", norm_scale, peak_ref, out_peak);
+for ip = 1:size(listen_pts, 1)
+    x_target = listen_pts(ip, 1);
+    y_target = listen_pts(ip, 2);
+    y_w = y_raw{ip} * norm_scale;
+    if max(abs(y_w)) > 1
+        warning('main:possibleClipping', '(%.2f, %.2f) はゾーン外で出力が1を超えるため、クリップして保存します。', x_target, y_target);
+        y_w = max(min(y_w, 1), -1);
+    end
+    out_wav_path = sprintf("listen_%s_at_x%.2f_y%.2f_floor%g.wav", tag, x_target, y_target, floor_dB);
+    audiowrite(out_wav_path, y_w, fs_audio);
+    fprintf("聴取点 (x=%.3f, y=%.3f) の音声を '%s' として保存しました。\n", x_target, y_target, out_wav_path);
 end
-
-%% 4. 入力音声(RAW音声)の読み込み
-% .raw はヘッダを持たないPCM生データのため audioread では読めない。
-% サンプリングレート・ビット深度・チャンネル数は毎回入力させず、
-% 以下の固定値を使用する（録音環境に合わせてここを書き換えてください）。
-n_channels  = 2;       % チャンネル数 (1: モノラル, 2: ステレオ)
-if ~isscalar(n_channels) || ~isfinite(n_channels) || n_channels < 1 || n_channels ~= fix(n_channels)
-    error('main:invalidChannelCount', 'n_channelsには1以上の整数を指定してください。');
-end
-
-raw_type = 'int16';   % bit_depth=16 に対応する読み込み型
-max_val  = 2^15;       % 16bit符号付き整数のフルスケール値
-
-in_wav_path = input('入力音声ファイル(.raw)のパスを入力してください: ', 's');
-
-fid = fopen(in_wav_path, 'rb');
-if fid == -1
-    error('main:fileOpenFailed', 'ファイルを開けませんでした: %s', in_wav_path);
-end
-raw_data = fread(fid, Inf, raw_type);
-fclose(fid);
-if isempty(raw_data)
-    error('main:emptyInput', '入力音声ファイルにPCMデータがありません。');
-end
-if mod(numel(raw_data), n_channels) ~= 0
-    error('main:incompleteFrame', ...
-        '入力音声のサンプル数がチャンネル数(%d)で割り切れません。RAW形式とチャンネル数を確認してください。', ...
-        n_channels);
-end
-
-% チャンネル数に応じてインターリーブを分離し、多チャンネルはモノラル化
-if n_channels > 1
-    n_frames = floor(numel(raw_data) / n_channels);
-    raw_data = reshape(raw_data(1:n_frames*n_channels), n_channels, n_frames).';
-    x_audio = mean(raw_data, 2);
-else
-    x_audio = raw_data;
-end
-x_audio = double(x_audio) / max_val;
-
-%% 5. 共通FFTビン上の応答から因果FIRを作り、入力と線形畳み込み
-% 設計帯域外はゼロ(500-2000Hzの帯域制限)。負周波数側を共役対称にする。
-H_spec = zeros(L_fir, 1);
-H_spec(bin_idx + 1) = H_sys_design(:);
-H_spec(L_fir - bin_idx + 1) = conj(H_sys_design(:));
-h_fir = real(ifft(H_spec));
-
-% 8msのモデリング遅延で応答を因果側へ移した後、循環ではなく線形畳み込みにする。
-y_out = conv(x_audio, h_fir);
-
-% 出力(y_out)自身のピークで正規化すると、座標ごとに異なるはずの
-% 音量(BZ/GZ/DZのコントラスト)が毎回0.95に均されて消えてしまう。
-% 入力音声(x_audio)側のピークを基準にした固定スケールを使うことで、
-% 座標間の相対的な音量差を保持したまま保存する。
-norm_scale = 0.95 / (max(abs(x_audio)) + eps);
-y_out = y_out * norm_scale;
-if max(abs(y_out)) > 1
-    warning('main:possibleClipping', '出力振幅が1を超えています。クリッピングに注意してください。');
-end
-
-%% 6. WAV保存 (自動再生はしない)
-out_wav_path = sprintf("listen_at_x%.2f_y%.2f.wav", x_target, y_target);
-audiowrite(out_wav_path, y_out, fs_audio);
-fprintf("聴取点 (x=%.3f, y=%.3f) の音声を '%s' として保存しました。\n", x_target, y_target, out_wav_path);

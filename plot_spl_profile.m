@@ -11,6 +11,21 @@ actual_y = y(y_idx);
 % 指定ラインの音圧レベル(SPL)を P_matrix から抽出
 spl_profile = P_matrix(y_idx, :);
 
+% 二重音声(use_dual)のときは、音Bの同じ線上のレベルも求める（音Aと別の色で重ねて描く）。
+% 音Bは音Aの左右反転を使わず、音Bの駆動信号 drvB から独立に計算する。
+% 基準は音Bの明るい側(右ゾーン)の制御点の平均広帯域エネルギー(0 dB)。
+plot_dual = exist('use_dual', 'var') && use_dual;
+if plot_dual
+    G_line = IR_freefield([x(:), actual_y * ones(numel(x), 1)], pos_sp, k_list);
+    p_line_B = zeros(numel(x), f_len);
+    for n = 1:f_len
+        p_line_B(:, n) = G_line(:,:,n) * drvB(:, n);
+    end
+    clear G_line;
+    bz_ref_power_B = mean(sum(abs(p_ctrlB(1:num_bzB, :)).^2, 2));
+    spl_profile_B = (10 * log10(sum(abs(p_line_B).^2, 2) / bz_ref_power_B)).';
+end
+
 % 新しいグラフウィンドウを開く
 figure;
 
@@ -29,13 +44,25 @@ bnd_bz_gz = gz_x_min;
 bnd_gz_dz = gz_x_max;
 
 % Y軸の描画範囲を設定
-y_min_plot = min(spl_profile) - 5;
-y_max_plot = max(spl_profile) + 5;
+if plot_dual
+    y_min_plot = min([spl_profile, spl_profile_B]) - 5;
+    y_max_plot = max([spl_profile, spl_profile_B]) + 5;
+else
+    y_min_plot = min(spl_profile) - 5;
+    y_max_plot = max(spl_profile) + 5;
+end
+if plot_dual
+    name_bz = 'Left zone (Sound A bright)';
+    name_dz = 'Right zone (Sound B bright)';
+else
+    name_bz = 'Bright Zone';
+    name_dz = 'Dark Zone';
+end
 
 % 1. BZ領域 (シアン)
 patch([bz_x_min bnd_bz_gz bnd_bz_gz bz_x_min], ...
       [y_min_plot y_min_plot y_max_plot y_max_plot], ...
-      'c', 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'DisplayName', 'Bright Zone');
+      'c', 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'DisplayName', name_bz);
 hold on;
 
 % 2. GZ領域 (グリーン) 
@@ -46,11 +73,18 @@ patch([gz_x_min gz_x_max gz_x_max gz_x_min], ...
 % 3. DZ領域 (グレー)
 patch([bnd_gz_dz dz_x_max dz_x_max bnd_gz_dz], ...
       [y_min_plot y_min_plot y_max_plot y_max_plot], ...
-      'k', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Dark Zone');
+      'k', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', name_dz);
 
 % 4. 音圧プロファイルの折れ線グラフ
-plot(x, spl_profile, '-','Color', [0, 0, 0.5], 'LineWidth', 1.5, ...
-    'DisplayName', sprintf('Relative level (y = %.2f m)', actual_y));
+if plot_dual
+    plot(x, spl_profile, '-', 'Color', [0, 0, 0.5], 'LineWidth', 1.5, ...
+        'DisplayName', sprintf('Sound A (y = %.2f m)', actual_y));
+    plot(x, spl_profile_B, '-', 'Color', [0.85, 0.33, 0.10], 'LineWidth', 1.5, ...
+        'DisplayName', sprintf('Sound B (y = %.2f m)', actual_y));
+else
+    plot(x, spl_profile, '-','Color', [0, 0, 0.5], 'LineWidth', 1.5, ...
+        'DisplayName', sprintf('Relative level (y = %.2f m)', actual_y));
+end
 
 % グラフの装飾設定
 xlabel('x [m]');
@@ -66,7 +100,11 @@ grid on;
 legend('Location', 'best');
 
 % プロファイルグラフも画像として保存する場合
-profile_name = sprintf("SPL_Profile_y%.2fm.png", actual_y);
+if plot_dual
+    profile_name = sprintf("SPL_Profile_dual_y%.2fm.png", actual_y);
+else
+    profile_name = sprintf("SPL_Profile_y%.2fm.png", actual_y);
+end
 drawnow;
 saveas(gcf, profile_name, 'png');
 
@@ -122,6 +160,13 @@ dz_ripple_pp = max(spl_profile(dz_line_mask)) - min(spl_profile(dz_line_mask));
 fprintf("\n--- 遷移の数値評価 (y = %.2f m) ---\n", actual_y);
 fprintf("[軸1 変化の速さ] GZ内 傾き: 最大 %.2f dB/m, 平均 %.2f dB/m\n", slope_gz_max, slope_gz_mean);
 fprintf("[軸2 不連続の有無] BZ-GZ境界キンク: %.2f dB/m,  GZ-DZ境界キンク: %.2f dB/m\n", kink_bz_gz, kink_gz_dz);
+if plot_dual
+    [~, i_c] = min(abs(x));   % x = 0 に最も近い格子点
+    fprintf("[二重音声] x=%.2f m の音A=%.2f dB, 音B=%.2f dB / 音A: 左ゾーン内 %.2f dB, 右ゾーン内 %.2f dB / 音B: 左ゾーン内 %.2f dB, 右ゾーン内 %.2f dB\n", ...
+        x(i_c), spl_profile(i_c), spl_profile_B(i_c), ...
+        mean(spl_profile(bz_line_mask)), mean(spl_profile(dz_line_mask)), ...
+        mean(spl_profile_B(bz_line_mask)), mean(spl_profile_B(dz_line_mask)));
+end
 fprintf("[補助: ゾーン内リプル] BZ内 最大-最小: %.2f dB,  DZ内 最大-最小: %.2f dB\n", bz_ripple_pp, dz_ripple_pp);
 
 % 実行のたびにCSVへ追記し、設定を変えた複数回の結果を後から比較できるようにする。

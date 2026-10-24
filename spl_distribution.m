@@ -111,7 +111,7 @@ hold off;
 % グラフの装飾設定
 xlabel("x[m]"); ylabel("y[m]"); % 軸のラベル
 colorbar                        % 画面右側に音圧の大きさと色の対応を示すカラーバーを表示
-caxis([-60 15])                 % （コメントアウト：カラーバーの最小値・最大値を固定したい場合に使用）
+caxis([-30 15])                 % カラーバーの範囲 [最小 最大] [dB]。最小を -60 から -30 に変更
 title('Relative broadband level (mean BZ control-point energy = 0 dB)');
 daspect([1 1 1])                % 空間の縦横比（アスペクト比）を 1:1 に固定
 

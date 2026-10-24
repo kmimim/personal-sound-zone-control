@@ -1,9 +1,11 @@
-function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau, floor_dB, dz_mode)
+function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau, floor_dB, dz_mode, reverse_gz)
 
     if nargin < 10 || isempty(tau), tau = 0; end
     % Defaults preserve compatibility with calls using the original signature.
     if nargin < 11 || isempty(floor_dB), floor_dB = -20.0; end
     if nargin < 12 || isempty(dz_mode), dz_mode = "zero"; end
+    % reverse_gz: true ならGZの遷移方向を反転する。BZが右側の配置(二重音声の音B)で使う。
+    if nargin < 13 || isempty(reverse_gz), reverse_gz = false; end
     if ~isscalar(floor_dB) || ~isfinite(floor_dB) || floor_dB > 0
         error('filter_pm:invalidFloorDb', ...
             'floor_dBには0以下の有限なスカラー値を指定してください。');
@@ -99,6 +101,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
 
                 % 0 (BZ側) ～ 1 (DZ側) に正規化した位置パラメータ t
                 t = (x_m - min_x_gz) / (max_x_gz - min_x_gz);
+                if reverse_gz, t = 1 - t; end   % BZが右側のとき、遷移方向を反転
 
                 % 両端(t=0, t=1)で微分ゼロのスムーズステップ
                 s = 3*t.^2 - 2*t.^3;

@@ -23,9 +23,9 @@ f_len = length(freq_list);
 pltPos = true;    % pltPos = スピーカーとマイクの配置図
 pltSPL = true;    % pltSPL = 空間全体の音圧レベル分布図
 
-% 二重音声と聴取音声の入出力設定（空 [] / "" の場合は実行時に対話入力）
+% 二重音声と聴取音声の入出力設定（聴取点 [] は既定の比較点を使う）
 dual_mode  = true;    % true: 二重音声(音A:BZ左 + 音B:BZ右) / false: 音Aのみ
-listen_pts = [];      % 聴取点 [x, y] を行ごとに並べる。例: [-1.75 1.2; 0 1.2; 1.75 1.2]
+listen_pts = [];      % 聴取点 [x, y]。空なら左右BZ中心とGZ中心を同一スケールで出力
 rawA_path  = "";      % 音声A(.raw)のパス
 rawB_path  = "";      % 音声B(.raw)のパス（dual_mode=true のとき使用）
 n_channels = 1;       % RAWのチャンネル数 (1: モノラル, 2: ステレオ→平均してモノ化)
@@ -182,18 +182,25 @@ end
 %% (既存の音場制御・AC・SPL計算には一切手を加えない独立処理)
 %% =====================================================================
 
-%% 1. 聴取点座標（listen_pts が空なら対話入力）
-% input()を数値モードで使うと入力文字列がevalされてしまうため、
-% 文字列として受け取りstr2doubleで数値化する（evalを回避）。
+%% 1. 聴取点座標（既定は比較する3点を同じ実行で出力）
 if isempty(listen_pts)
-    x_target = str2double(input('聴取点の x 座標 [m] を入力してください: ', 's'));
-    y_target = str2double(input('聴取点の y 座標 [m] を入力してください: ', 's'));
-    listen_pts = [x_target, y_target];
+    if use_dual
+        x_bz = pos_mic(1:num_bz, 1);
+        x_gz = pos_mic(num_bz+1:num_bz+num_gz, 1);
+        x_dz = pos_mic(num_bz+num_gz+1:end, 1);
+        x_bz_mid = (min(x_bz) + max(x_bz)) / 2;
+        x_gz_mid = (min(x_gz) + max(x_gz)) / 2;
+        x_dz_mid = (min(x_dz) + max(x_dz)) / 2;
+        listen_pts = [x_bz_mid, zone_h; x_gz_mid, zone_h; x_dz_mid, zone_h];
+    else
+        x_target = str2double(input('聴取点の x 座標 [m] を入力してください: ', 's'));
+        y_target = str2double(input('聴取点の y 座標 [m] を入力してください: ', 's'));
+        listen_pts = [x_target, y_target];
+    end
 end
 if size(listen_pts, 2) ~= 2 || any(~isfinite(listen_pts(:)))
     error('main:invalidInput', '聴取点は有限の数値で [x, y] の行として指定してください。');
 end
-
 %% 2. 入力音声(RAW音声)の読み込み
 % .raw はヘッダを持たないPCM生データのため audioread では読めない。
 raw_type = 'int16';   % 16bit PCM
@@ -217,15 +224,18 @@ n_max = max(numel(x_A), numel(x_B));
 x_A(end+1:n_max, 1) = 0;
 x_B(end+1:n_max, 1) = 0;
 
-% 出力自身のピークで正規化すると座標ごとの音量差(BZ/GZ/DZのコントラスト)が消えてしまう。
-% そこで、指定した全聴取点の出力を一度すべて作り、その中の最大ピークが out_peak になるような
-% 「全座標共通の1つのスケール」をかける（座標間の相対的な音量差は保たれ、クリッピングも起きない）。
-% 二重音声では2つの音が足し合わさるため、入力のピークだけを基準にするとBZでも1を超えることがある。
-% ただし最大ピークを数えるのは、制御ゾーン(BZ/GZ/DZ)内の聴取点だけにする。スピーカー付近などゾーン外の点は
-% 音圧が大きくなりやすく、含めるとゾーン内のスケールが下がってしまうため。ゾーン外の点が1を超える場合は警告してクリップする。
-out_peak = 0.95;
-y_raw = cell(size(listen_pts, 1), 1);
-in_area = true(size(listen_pts, 1), 1);   % 聴取点が制御ゾーン内にあるか
+% 音量基準は、制御点群の中心で主役音だけを計算した基準点ピークに置く。
+% 聴取点の選び方で全体音量が変わらないよう、全WAVに共通のスケールを適用する。
+% 二重音声の基準点では反対側の音を含めず、聴取点ではA+Bを合成する。
+% 合成後に1を超える聴取点があれば、保存前に警告してクリップする。
+out_peak = 0.85;
+ref_pts = mean(pos_mic(1:num_bz, :), 1);
+if use_dual
+    ref_pts = [ref_pts; mean(pos_mic(num_bz+num_gz+1:end, :), 1)];
+end
+n_listen = size(listen_pts, 1);
+all_pts = [listen_pts; ref_pts];
+y_raw = cell(size(all_pts, 1), 1);
 
 pos_bz_pt = pos_mic(1:num_bz, :);
 pos_gz_pt = pos_mic(num_bz+1 : num_bz+num_gz, :);
@@ -245,9 +255,10 @@ end
 
 if use_dual, tag = "dual"; else, tag = "single"; end
 
-for ip = 1:size(listen_pts, 1)
-    x_target = listen_pts(ip, 1);
-    y_target = listen_pts(ip, 2);
+for ip = 1:size(all_pts, 1)
+    is_listen = ip <= n_listen;
+    x_target = all_pts(ip, 1);
+    y_target = all_pts(ip, 2);
 
     %% 3. 指定座標がBZ/GZ/DZのどこにあるか判定
     if use_dual
@@ -282,8 +293,9 @@ for ip = 1:size(listen_pts, 1)
     else
         zone_label = "制御ゾーン外 (BZ/GZ/DZいずれにも属さない)";
     end
-    fprintf("指定座標 (x=%.3f, y=%.3f) は [%s] に位置します。\n", x_target, y_target, zone_label);
-    in_area(ip) = isempty(strfind(char(zone_label), '制御ゾーン外'));
+    if is_listen
+        fprintf("指定座標 (x=%.3f, y=%.3f) は [%s] に位置します。\n", x_target, y_target, zone_label);
+    end
 
     %% 4. 指定座標-各スピーカー間の伝達関数と駆動信号から、その座標での周波数応答を求める
     G_point = IR_freefield([x_target, y_target], pos_sp, k_list); % [1 x num_sp x f_len]
@@ -299,20 +311,30 @@ for ip = 1:size(listen_pts, 1)
 
     % その点での各音のレベル（それぞれの明るい側のBZ平均を0 dBとした広帯域レベル）
     L_A = 10 * log10(sum(abs(H_A).^2) / E_ref_A);
-    if use_dual
+    if is_listen && use_dual
         L_B = 10 * log10(sum(abs(H_B).^2) / E_ref_B);
         fprintf("  レベル: 音A=%.1f dB, 音B=%.1f dB (差 %.1f dB)\n", L_A, L_B, L_A - L_B);
-    else
+    elseif is_listen
         fprintf("  レベル: 音A=%.1f dB\n", L_A);
     end
 
     %% 5. 共通FFTビン上の応答から因果FIRを作り、入力と線形畳み込み
     % 設計帯域外はゼロ(500-2000Hzの帯域制限)。8msのモデリング遅延で応答を因果側へ移してある。
     h_A = spec_to_fir(H_A, bin_idx, L_fir);
-    y_out = conv(x_A, h_A);
+    y_A = conv(x_A, h_A);
+    y_out = y_A;
     if use_dual
         h_B = spec_to_fir(H_B, bin_idx, L_fir);
-        y_out = y_out + conv(x_B, h_B);
+        y_B = conv(x_B, h_B);
+        y_out = y_out + y_B;
+    end
+    if ~is_listen
+        ref_idx = ip - n_listen;
+        if use_dual && ref_idx == 2
+            y_out = y_B;
+        else
+            y_out = y_A;
+        end
     end
     y_raw{ip} = y_out;
 end
@@ -320,22 +342,19 @@ end
 %% 6. 共通スケールをかけてWAV保存 (自動再生はしない)
 peak_pts = cellfun(@(v) max(abs(v)), y_raw);
 peak_pts = peak_pts(:);
-if any(in_area)
-    peak_ref = max(peak_pts(in_area));      % ゾーン内の聴取点だけでスケールを決める
-else
-    peak_ref = max(peak_pts);
-end
+peak_ref = max(peak_pts(n_listen+1:end));
 norm_scale = out_peak / (peak_ref + eps);
-fprintf("全聴取点共通のスケール: %.4f (ゾーン内の最大ピーク %.4f -> %.2f)\n", norm_scale, peak_ref, out_peak);
-for ip = 1:size(listen_pts, 1)
+fprintf("基準点の主役音ピークに基づく共通スケール: %.4f (%.4f -> %.2f)\n", norm_scale, peak_ref, out_peak);
+for ip = 1:n_listen
     x_target = listen_pts(ip, 1);
     y_target = listen_pts(ip, 2);
     y_w = y_raw{ip} * norm_scale;
     if max(abs(y_w)) > 1
-        warning('main:possibleClipping', '(%.2f, %.2f) はゾーン外で出力が1を超えるため、クリップして保存します。', x_target, y_target);
+        warning('main:possibleClipping', '(%.2f, %.2f) の合成出力が1を超えるため、クリップして保存します。', x_target, y_target);
         y_w = max(min(y_w, 1), -1);
     end
-    out_wav_path = sprintf("listen_%s_at_x%.2f_y%.2f_floor%g.wav", tag, x_target, y_target, floor_dB);
+    out_wav_path = sprintf("listen_%s_%s_floor%g_at_x%.2f_y%.2f.wav", ...
+        tag, dz_mode, floor_dB, x_target, y_target);
     audiowrite(out_wav_path, y_w, fs_audio);
     fprintf("聴取点 (x=%.3f, y=%.3f) の音声を '%s' として保存しました。\n", x_target, y_target, out_wav_path);
 end

@@ -5,15 +5,12 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
     if ~any(strcmp(layout_mode, {"zones", "referenceL"}))
         error('pos_sp_mic:invalidLayout', 'layout_modeは"zones"または"referenceL"を指定してください。');
     end
-    
-    % スピーカーの配置形状を切り替えるフラグ（false: 直線状 / true: 円弧状）
-    isArc = false; 
 
-    %% ---------------------------------------------------------------------
+    isArc = false;  % false: 直線 / true: 円弧
+
     %% 制御点の座標計算
-    %% ---------------------------------------------------------------------
     if strcmp(layout_mode, "referenceL")
-        % placement.pdf と同じ配置: 再生点1点、L字抑圧点、32台×0.05m。
+        % 再生点1点 + L字の抑圧点
         pos_bz = [-1.0, 1.0];
         x_leg = (0:0.04:1.0)';
         pos_dz = [x_leg, 0.10 * ones(size(x_leg))];
@@ -23,8 +20,6 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
         num_bz = size(pos_bz, 1);
         num_gz = 0;
     else
-        % 各ゾーンごとに、それぞれのサイズ(bz_size/gz_size/dz_size)から
-        % 独立して格子点数・格子座標を計算する
         n_x_bz = round(bz_size(1) / itv_mic(1)) + 1;
         n_y_bz = round(bz_size(2) / itv_mic(2)) + 1;
         bz_x = linspace(-bz_size(1)/2, bz_size(1)/2, n_x_bz);
@@ -40,12 +35,7 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
         dz_x = linspace(-dz_size(1)/2, dz_size(1)/2, n_x_dz);
         dz_y = linspace(-dz_size(2)/2, dz_size(2)/2, n_y_dz);
 
-    % GZ幅(などゾーン幅)をitv_mic(1)に対して狭くしすぎると、x方向の
-    % 格子点数が1点まで減り、filter_pm.m 内の正規化位置t計算が0/0=NaNに
-    % なって全チャンネルが壊れる。エラーメッセージなしで壊れると原因が
-    % わかりにくいため、ここで事前に検出する。
-    % 2点未満は即エラー、5点未満(目安)は「遷移形状を表現するには粗い」
-    % 警告のみ出して処理は続行する。
+        % x方向の格子点数が少ないゾーンを検出（GZ幅が狭いと filter_pm の t が 0/0 になる）
         min_pts_hard = 2;
         min_pts_soft = 5;
         zone_names = {'BZ', 'GZ', 'DZ'};
@@ -62,18 +52,11 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
             end
         end
 
-    % -----------------------
-    % 各ゾーンのシフト後中心位置
-    % BZを左、GZを中央、DZを右に配置。
-    % dist_zoneでBZ-DZ間の中心間距離を制御する
-    % -----------------------
+        % BZ=左、GZ=中央、DZ=右
         bz_center = [-dist_zone/2, y_center];
         gz_center = [ 0.0,         y_center];
         dz_center = [ dist_zone/2, y_center];
 
-    % -----------------------
-    % 点格納（各ゾーンをそれぞれの格子サイズで独立に生成）
-    % -----------------------
         pos_bz = zeros(n_x_bz*n_y_bz, 2);
         n = 0;
         for x_idx = 1:length(bz_x)
@@ -101,10 +84,7 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
             end
         end
 
-        % ゾーン境界(BZ-GZ, GZ-DZ)では、隣り合うゾーンの端の制御点が同じ座標に重なる。
-        % 同じ点にBZ側とGZ側など別々の目標を重ねて与えると目標が食い違うため、
-        % 境界の点はGZ所属で1回だけ使い、BZ/DZ側の重複点を取り除く。
-        % (既定の配置では制御点が 1806点 -> 1778点 になる)
+        % 境界の点はGZ所属で1回だけ使う（BZ/DZ側の重複点を除く）。既定配置は 1806点 → 1778点
         tol_dup = 1e-9;
         keep_bz = true(size(pos_bz, 1), 1);
         for i = 1:size(pos_bz, 1)
@@ -123,9 +103,7 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
     pos_mic = [pos_bz; pos_gz; pos_dz];
     num_mic = size(pos_mic, 1);
 
-    %% ---------------------------------------------------------------------
     %% スピーカーアレイ（音源）の座標計算
-    %% ---------------------------------------------------------------------
     if isArc
         itv_ang = pi/40;
         ang_sp = itv_ang * ((0.5 - num_sp/2) : (num_sp/2 - 0.5));
@@ -134,16 +112,14 @@ function [pos_sp, pos_mic, num_mic, num_bz, num_gz] = pos_sp_mic(num_sp, y_cente
         pos_sp = [x_sp', y_sp'];
     else
         x_sp_1 = -(num_sp-1)/2 * itv_sp;
-        y_sp_1 = 0;       
-        
-        pos_sp = zeros(num_sp, 2); 
-        pos_sp(1,:) = [x_sp_1, y_sp_1]; 
+        y_sp_1 = 0;
+
+        pos_sp = zeros(num_sp, 2);
+        pos_sp(1,:) = [x_sp_1, y_sp_1];
         pos_sp(2:end, 1) = x_sp_1 + (1:num_sp-1) * itv_sp;
     end
 
-    %% ---------------------------------------------------------------------
     %% 配置図の描画と画像保存
-    %% ---------------------------------------------------------------------
     if pltPos
         figure;
         set(gcf, 'Position', [100, 100, 900, 700]);

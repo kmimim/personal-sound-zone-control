@@ -1,5 +1,5 @@
 function x = read_raw_pcm(path, n_channels, raw_type, max_val)
-    % ヘッダなしPCM(RAW)を読み、[-1,1)に正規化した列ベクトルを返す。多チャンネルは平均してモノ化。
+    % ヘッダなしPCM(RAW)を読み、[-1,1)に正規化した列ベクトルを返す（多チャンネルは平均してモノ化）
     if ~isscalar(n_channels) || ~isfinite(n_channels) || n_channels < 1 || n_channels ~= fix(n_channels)
         error('read_raw_pcm:invalidChannelCount', 'n_channelsには1以上の整数を指定してください。');
     end

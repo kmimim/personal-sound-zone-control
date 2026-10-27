@@ -1,36 +1,25 @@
 # 音圧分布図生成
 
-%% -------------------------------------------------------------------------
-%% 1. 空間全体の計算用格子点の作成
-%% -------------------------------------------------------------------------
-% 部屋の空間を2cm間隔の細かい網の目状に分割します
+%% 空間全体の計算用格子点の作成
 x = room_size(1) : itv_room : room_size(2);
 y = room_size(3) : itv_room : room_size(4);
 
-% meshgrid関数により、2次元の格子点座標（行列）を生成
 [X, Y] = meshgrid(x, y);
 
-% 行列を縦一列のベクトルに変換し、空間内のすべての評価点の座標ペアを作成 [点数 × 2列(x,y)]
 pos_target = [X(:), Y(:)];
 
-% 外部関数 IR_freefield.m を再利用し、32台のスピーカーから「空間内のすべての評価点」への伝達関数を計算
 G_target = IR_freefield(pos_target, pos_sp, k_list);
 
-%% -------------------------------------------------------------------------
-%% 2. 空間全体の音圧レベル（SPL [dB]）の計算
-%% -------------------------------------------------------------------------
-f_len = length(freq_list);
+%% 空間全体の音圧レベル（SPL [dB]）の計算
 
-% 空間内のすべての点における複素音圧を格納する行列を初期化
 p_t = zeros(length(pos_target), f_len);
 
 for n = 1:f_len
-    g_t = G_target(:,:,n);      % 空間の各点に対する伝達関数を取り出す
-    p_t(:,n) = g_t * drv(:,n);  % 伝達関数にスピーカーの駆動信号（drv）を掛け合わせて、実際の合成音圧を算出
+    g_t = G_target(:,:,n);  % 空間の各点に対する伝達関数を取り出す
+    p_t(:,n) = g_t * drv(:,n);
 end
 
-% 各周波数を等しい重みとして二乗振幅を合算し、BZ制御点の平均合算エネルギーを
-% 0 dB基準とする。絶対SPLではなく、モデル内の相対広帯域レベルとして扱う。
+% BZ制御点の平均広帯域エネルギーを0 dBとした相対レベル
 bz_ref_power = mean(sum(abs(p_ctrl(1:num_bz, :)).^2, 2));
 if ~isfinite(bz_ref_power) || bz_ref_power <= 0
     error('spl_distribution:invalidReferencePower', ...
@@ -38,12 +27,8 @@ if ~isfinite(bz_ref_power) || bz_ref_power <= 0
 end
 p_t_dB = 10 * log10(sum(abs(p_t).^2, 2) / bz_ref_power);
 
-%% -------------------------------------------------------------------------
-%% 3. グラフに描画する各ゾーンの「四角い枠線」のコーナー座標計算
-%% -------------------------------------------------------------------------
-% マイクの座標から、ブライトゾーンとダークゾーンのそれぞれの位置を抽出
+%% グラフに描画する各ゾーンの「四角い枠線」のコーナー座標計算
 pos_bz = pos_mic(1:num_bz, :);
-pos_gz = pos_mic(num_bz+1 : num_bz+num_gz, :);
 pos_dz = pos_mic(num_bz+num_gz+1:end, :);
 
 if strcmp(geometry_mode, "referenceL")
@@ -59,12 +44,10 @@ else
     con_dz = [dx_min, dy_min; dx_min, dy_max; dx_max, dy_max; dx_max, dy_min; dx_min, dy_min];
 end
 
-%% -------------------------------------------------------------------------
-%% 4. 音圧分布図のプロットと画像保存
-%% -------------------------------------------------------------------------
-figure % 新しいグラフウィンドウを開く
+%% 音圧分布図のプロットと画像保存
+figure  % 新しいグラフウィンドウを開く
 
-% ② 黒 -> 紫 -> 赤 -> 黄 となるカスタムカラーマップの作成
+% 黒 → 紫 → 赤 → 黄のカラーマップ
 c_black  = [0.05 0.05 0.05];
 c_purple = [0.35 0.00 0.55];
 c_red    = [0.90 0.15 0.15];
@@ -87,19 +70,14 @@ custom_cmap(c2+1:end, 1) = linspace(c_red(1), c_yellow(1), n_c-c2);
 custom_cmap(c2+1:end, 2) = linspace(c_red(2), c_yellow(2), n_c-c2);
 custom_cmap(c2+1:end, 3) = linspace(c_red(3), c_yellow(3), n_c-c2);
 
-% カラーマップの適用
 colormap(custom_cmap);
 
-% 1次元の音圧ベクトルを、2次元の格子サイズ（画像形状）に変形
-P_matrix = reshape(p_t_dB, size(X)); 
+P_matrix = reshape(p_t_dB, size(X));
 
+imagesc(x, y, P_matrix); hold on;
+axis xy;  % imagesc特有の上下反転を直し、座標の向きを正常化する
 
-% imagesc を使って音圧分布を画像としてプロット（これで枠線でスパッと切れます）
-h1 = imagesc(x, y, P_matrix); hold on;
-axis xy; % imagesc特有の上下反転を直し、座標の向きを正常化する
-
-h2 = scatter(pos_sp(:,1), pos_sp(:,2), 15, 'k', '^', 'filled'); hold on;
-% ③ エリアの点線を見やすい色（シアンと白）、細い破線（LineWidth: 0.8）に変更
+scatter(pos_sp(:,1), pos_sp(:,2), 15, 'k', '^', 'filled'); hold on;
 if strcmp(geometry_mode, "referenceL")
     scatter(pos_bz(:,1), pos_bz(:,2), 50, 'r', 'filled');
     scatter(pos_dz(:,1), pos_dz(:,2), 20, 'w', 'filled', 'MarkerEdgeColor', 'k');
@@ -108,35 +86,28 @@ else
     plot(con_dz(:,1), con_dz(:,2), 'w--', 'LineWidth', 0.8);
 end
 hold off;
-% グラフの装飾設定
-xlabel("x[m]"); ylabel("y[m]"); % 軸のラベル
-colorbar                        % 画面右側に音圧の大きさと色の対応を示すカラーバーを表示
-caxis([-30 15])                 % カラーバーの範囲 [最小 最大] [dB]。最小を -60 から -30 に変更
+xlabel("x[m]"); ylabel("y[m]");  % 軸のラベル
+colorbar  % 画面右側に音圧の大きさと色の対応を示すカラーバーを表示
+caxis([-30 15])
 title('Relative broadband level (mean BZ control-point energy = 0 dB)');
-daspect([1 1 1])                % 空間の縦横比（アスペクト比）を 1:1 に固定
+daspect([1 1 1])  % 空間の縦横比（アスペクト比）を 1:1 に固定
 
-% 表示範囲ををピクセルの「端」ぴったりに合わせる
 xlim([room_size(1), room_size(2)])
 ylim([room_size(3), room_size(4)])
 
-grid on;                        % 背景に格子線を表示
-ax = gca;                       % 現在の軸の設定を取得
+grid on;  % 背景に格子線を表示
+ax = gca;  % 現在の軸の設定を取得
 
-% Octaveでもエラーが出ないように set 関数に書き換え
 try
     set(ax, 'GridColor', [1, 1, 1]);
     set(ax, 'GridAlpha', 0.35);
     set(ax, 'GridLineStyle', ':');
 catch
-    % 万が一、古いOctaveでプロパティ自体が存在しない場合はスキップ
 end
 
-% 枠線を四方すべてに閉じ、最前面に持ってくる
-box on;                         % 上と右にも黒い枠線を描画して閉じ込める
-set(gca, 'Layer', 'top');       % 枠線とグリッド線をカラーマップの「上」に重ねる
+box on;  % 上と右にも黒い枠線を描画して閉じ込める
+set(gca, 'Layer', 'top');  % 枠線とグリッド線をカラーマップの「上」に重ねる
 
-% 画面で見えている通りのサイズ・余白のまま保存する設定
-set(gcf, 'PaperPositionMode', 'auto'); 
+set(gcf, 'PaperPositionMode', 'auto');
 
-% main.m であらかじめ生成されたファイル名（map_name）で、描画したグラフをPNG画像として保存
 saveas(gcf, map_name, 'png');

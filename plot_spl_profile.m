@@ -1,19 +1,12 @@
-%% -------------------------------------------------------------------------
-%% 5. 指定したy座標(1ライン)のx方向音圧プロファイルの描画
-%% -------------------------------------------------------------------------
-% 抽出するy座標の指定
+%% 指定したy座標(1ライン)のx方向音圧プロファイルの描画
 y_target_line = zone_h;
 
-% 指定したy座標に最も近い y 配列のインデックスを取得
 [~, y_idx] = min(abs(y - y_target_line));
-actual_y = y(y_idx); 
+actual_y = y(y_idx);
 
-% 指定ラインの音圧レベル(SPL)を P_matrix から抽出
 spl_profile = P_matrix(y_idx, :);
 
-% 二重音声(use_dual)のときは、音Bの同じ線上のレベルも求める（音Aと別の色で重ねて描く）。
-% 音Bは音Aの左右反転を使わず、音Bの駆動信号 drvB から独立に計算する。
-% 基準は音Bの明るい側(右ゾーン)の制御点の平均広帯域エネルギー(0 dB)。
+% 二重音声: 音Bの同じ線上のレベル（drvBから独立に計算。基準は音Bの明るい側のBZ平均）
 plot_dual = exist('use_dual', 'var') && use_dual;
 if plot_dual
     G_line = IR_freefield([x(:), actual_y * ones(numel(x), 1)], pos_sp, k_list);
@@ -26,24 +19,18 @@ if plot_dual
     spl_profile_B = (10 * log10(sum(abs(p_line_B).^2, 2) / bz_ref_power_B)).';
 end
 
-% 新しいグラフウィンドウを開く
 figure;
 
-% 評価には制御点の実座標を使う。con_*は図示用に内側へ縮めてあるため、
-% そこから境界を取ると傾き・キンクの評価位置が物理境界からずれる。
 pos_bz = pos_mic(1:num_bz, :);
 pos_gz = pos_mic(num_bz+1:num_bz+num_gz, :);
 pos_dz = pos_mic(num_bz+num_gz+1:end, :);
 bz_x_min = min(pos_bz(:,1)); bz_x_max = max(pos_bz(:,1));
 gz_x_min = min(pos_gz(:,1)); gz_x_max = max(pos_gz(:,1));
 dz_x_min = min(pos_dz(:,1)); dz_x_max = max(pos_dz(:,1));
-% 境界(BZ-GZ, GZ-DZ)の物理位置はGZの両端。境界の制御点はGZ所属で1回だけ使っているため、
-% BZ最端・DZ最端の制御点はGZ端の手前で終わる(bz_x_max < gz_x_min, dz_x_min > gz_x_max)。
-% 傾き・キンクの評価位置と図示の境界には、GZ端を使う。
+% 境界の位置 = GZの両端（境界の制御点はGZ所属）
 bnd_bz_gz = gz_x_min;
 bnd_gz_dz = gz_x_max;
 
-% Y軸の描画範囲を設定
 if plot_dual
     y_min_plot = min([spl_profile, spl_profile_B]) - 5;
     y_max_plot = max([spl_profile, spl_profile_B]) + 5;
@@ -59,23 +46,19 @@ else
     name_dz = 'Dark Zone';
 end
 
-% 1. BZ領域 (シアン)
 patch([bz_x_min bnd_bz_gz bnd_bz_gz bz_x_min], ...
       [y_min_plot y_min_plot y_max_plot y_max_plot], ...
       'c', 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'DisplayName', name_bz);
 hold on;
 
-% 2. GZ領域 (グリーン) 
 patch([gz_x_min gz_x_max gz_x_max gz_x_min], ...
       [y_min_plot y_min_plot y_max_plot y_max_plot], ...
       'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Gradation Zone');
 
-% 3. DZ領域 (グレー)
 patch([bnd_gz_dz dz_x_max dz_x_max bnd_gz_dz], ...
       [y_min_plot y_min_plot y_max_plot y_max_plot], ...
       'k', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', name_dz);
 
-% 4. 音圧プロファイルの折れ線グラフ
 if plot_dual
     plot(x, spl_profile, '-', 'Color', [0, 0, 0.5], 'LineWidth', 1.5, ...
         'DisplayName', sprintf('Sound A (y = %.2f m)', actual_y));
@@ -86,20 +69,16 @@ else
         'DisplayName', sprintf('Relative level (y = %.2f m)', actual_y));
 end
 
-% グラフの装飾設定
 xlabel('x [m]');
 ylabel('Relative broadband level [dB re mean BZ energy]');
 title(sprintf('x-direction relative level at y = %.2f m', actual_y));
 
-% 表示範囲とグリッドの設定
 xlim([room_size(1), room_size(2)]);
 ylim([y_min_plot, y_max_plot]);
 grid on;
 
-% 凡例の表示
 legend('Location', 'best');
 
-% プロファイルグラフも画像として保存する場合
 if plot_dual
     profile_name = sprintf("SPL_Profile_dual_y%.2fm.png", actual_y);
 else
@@ -108,29 +87,17 @@ end
 drawnow;
 saveas(gcf, profile_name, 'png');
 
-%% -------------------------------------------------------------------------
-%% 6. 遷移の数値評価（快適性評価 軸①変化の速さ / 軸②不連続の有無）
-%% -------------------------------------------------------------------------
-% spl_profile (y=zone_h ラインのSPL) を x方向に数値微分し、
-% 「どれだけ速く音圧が変化しているか」「境界で傾きが不連続に折れていないか」
-% を dB/m 単位で定量化する。目視確認の補助であり、被験者評価と突き合わせる
-% ための基準値としてCSVにも追記保存する。
+%% 遷移の数値評価（快適性評価 軸①変化の速さ / 軸②不連続の有無）
 
-% 空間微分 dSPL/dx [dB/m]。spl_profileはitv_room間隔の等間隔データなので単純差分でよい。
 dSPL_dx = diff(spl_profile) / itv_room;
-x_mid = (x(1:end-1) + x(2:end)) / 2; % 微分値に対応するx座標（区間の中点）
+x_mid = (x(1:end-1) + x(2:end)) / 2;  % 微分値に対応するx座標（区間の中点）
 
-% --- 軸①: 変化の速さ（GZ内の傾きの大きさ）[dB/m] ---
 gz_mask = (x_mid >= gz_x_min) & (x_mid <= gz_x_max);
 slope_gz_max  = max(abs(dSPL_dx(gz_mask)));
 slope_gz_mean = mean(abs(dSPL_dx(gz_mask)));
 
-% --- 軸②: 不連続の有無（ゾーン境界での傾きのキンク量）[dB/m] ---
-% 境界のすぐ内側・外側それぞれ数点分の平均傾きを比較し、その差(段差)を見る。
-% 差が大きいほど「境界で急に変化の仕方が折れ曲がっている」ことを意味する。
-edge_win = 3; % 境界から何グリッド点分の傾きを平均するか
+edge_win = 3;  % キンク = 境界の前後 edge_win 点の平均傾きの差 [dB/m]  % 境界から何グリッド点分の傾きを平均するか
 
-% BZ-GZ境界（GZの左端）
 idx_b2g = find(x_mid >= bnd_bz_gz - 1e-9, 1, 'first');
 if isempty(idx_b2g), idx_b2g = length(dSPL_dx); end
 i_lo = max(idx_b2g - edge_win, 1);
@@ -139,7 +106,6 @@ slope_bz_side       = mean(dSPL_dx(i_lo:idx_b2g-1));
 slope_gz_side_at_bz = mean(dSPL_dx(idx_b2g:i_hi));
 kink_bz_gz = abs(slope_gz_side_at_bz - slope_bz_side);
 
-% GZ-DZ境界（GZの右端）
 idx_g2d = find(x_mid >= bnd_gz_dz - 1e-9, 1, 'first');
 if isempty(idx_g2d), idx_g2d = length(dSPL_dx); end
 i_lo = max(idx_g2d - edge_win, 1);
@@ -148,10 +114,6 @@ slope_gz_side_at_dz = mean(dSPL_dx(i_lo:idx_g2d-1));
 slope_dz_side       = mean(dSPL_dx(idx_g2d:i_hi));
 kink_gz_dz = abs(slope_dz_side - slope_gz_side_at_dz);
 
-% --- 補助指標: BZ/DZ内の平坦さ（リプル）[dB] ---
-% 境界のキンク量だけでは「ゾーン内部で音圧が波打っている」状態を検知できない
-% （スピーカー開口がゾーン幅に対して不足している場合などに発生）。
-% そのため、BZ・DZそれぞれの区間内でのSPLの最大-最小(peak-to-peak)も併せて見る。
 bz_line_mask = (x >= bz_x_min) & (x <= bz_x_max);
 dz_line_mask = (x >= dz_x_min) & (x <= dz_x_max);
 bz_ripple_pp = max(spl_profile(bz_line_mask)) - min(spl_profile(bz_line_mask));
@@ -161,7 +123,7 @@ fprintf("\n--- 遷移の数値評価 (y = %.2f m) ---\n", actual_y);
 fprintf("[軸1 変化の速さ] GZ内 傾き: 最大 %.2f dB/m, 平均 %.2f dB/m\n", slope_gz_max, slope_gz_mean);
 fprintf("[軸2 不連続の有無] BZ-GZ境界キンク: %.2f dB/m,  GZ-DZ境界キンク: %.2f dB/m\n", kink_bz_gz, kink_gz_dz);
 if plot_dual
-    [~, i_c] = min(abs(x));   % x = 0 に最も近い格子点
+    [~, i_c] = min(abs(x));  % x = 0 に最も近い格子点
     fprintf("[二重音声] x=%.2f m の音A=%.2f dB, 音B=%.2f dB / 音A: 左ゾーン内 %.2f dB, 右ゾーン内 %.2f dB / 音B: 左ゾーン内 %.2f dB, 右ゾーン内 %.2f dB\n", ...
         x(i_c), spl_profile(i_c), spl_profile_B(i_c), ...
         mean(spl_profile(bz_line_mask)), mean(spl_profile(dz_line_mask)), ...
@@ -169,18 +131,16 @@ if plot_dual
 end
 fprintf("[補助: ゾーン内リプル] BZ内 最大-最小: %.2f dB,  DZ内 最大-最小: %.2f dB\n", bz_ripple_pp, dz_ripple_pp);
 
-% 実行のたびにCSVへ追記し、設定を変えた複数回の結果を後から比較できるようにする。
-% (isfileはOctave環境によって未実装の場合があるため exist(...,'file') を使用)
-log_file = "transition_metrics_log.csv";
+log_file = "transition_metrics_log_v2.csv";  % 条件の列を追加したため旧ログと別ファイル
 write_header = (exist(log_file, 'file') ~= 2);
 flog = fopen(log_file, 'a');
 if flog ~= -1
     if write_header
-        fprintf(flog, "timestamp,num_sp,bz_w,gz_w,dz_w,zone_h,dist_zone,AC_total,slope_gz_max_dB_per_m,slope_gz_mean_dB_per_m,kink_bz_gz_dB_per_m,kink_gz_dz_dB_per_m,bz_ripple_pp_dB,dz_ripple_pp_dB\n");
+        fprintf(flog, "timestamp,num_sp,bz_w,gz_w,dz_w,zone_h,dist_zone,AC_total,slope_gz_max_dB_per_m,slope_gz_mean_dB_per_m,kink_bz_gz_dB_per_m,kink_gz_dz_dB_per_m,bz_ripple_pp_dB,dz_ripple_pp_dB,floor_dB,dz_mode,dual\n");
     end
-    fprintf(flog, "%s,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", ...
+    fprintf(flog, "%s,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%g,%s,%d\n", ...
         datestr(now, 'yyyy-mm-dd HH:MM:SS'), num_sp, bz_size(1), gz_size(1), dz_size(1), zone_h, dist_zone, ...
-        AC_total, slope_gz_max, slope_gz_mean, kink_bz_gz, kink_gz_dz, bz_ripple_pp, dz_ripple_pp);
+        AC_total, slope_gz_max, slope_gz_mean, kink_bz_gz, kink_gz_dz, bz_ripple_pp, dz_ripple_pp, floor_dB, dz_mode, plot_dual);
     fclose(flog);
 else
     warning('plot_spl_profile:logOpenFailed', 'transition_metrics_log.csv を開けなかったため、ログ追記をスキップしました。');

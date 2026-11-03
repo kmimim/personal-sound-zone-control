@@ -27,18 +27,18 @@ rawB_path  = "";  % 音声B(.raw)のパス（dual_mode=true のとき使用）
 n_channels = 1;  % RAWのチャンネル数
 
 %% ゾーンとスピーカーの配置
-room_size = [-3.0, 3.0, 0, 2.0];
+room_size = [-1.5, 1.5, 0, 3.0];
 itv_room = 0.02;  % 空間全体の計算用格子点の間隔 [m]
 
-num_sp = 64;  % スピーカー数（64台ではBZ端が開口外で波打つ）
-zone_h = 1.2;  % スピーカー列からゾーン中心まで [m]（鑑賞距離の仮値）
-dist_zone = 3.5;  % BzとDzの中心間距離 [m]
-bz_size = [1.5, 1.0];  % Bzの大きさ [幅(x), 奥行き(y)] [m]
-gz_size = [2.0, 1.0];  % Gzの大きさ [幅(x), 奥行き(y)] [m]
-dz_size = [1.5, 1.0];  % Dzの大きさ [幅(x), 奥行き(y)] [m]
+num_sp = 32;  % スピーカー数（32台ではBZ端が開口外で波打つ）
+zone_h = 1.0;  % スピーカー列からゾーン中心まで [m]（鑑賞距離の仮値）
+bz_size = [0.4, 0.5];  % BZの大きさ [幅(x), 奥行き(y)] [m]（従来値の1/2）
+gz_size = [0.75, 0.5];    % GZの大きさ [幅(x), 奥行き(y)] [m]（従来値の1/2）
+dz_size = [0.4, 0.5];  % DZの大きさ [幅(x), 奥行き(y)] [m]（従来値の1/2）
+dist_zone = bz_size(1)/2 + gz_size(1) + dz_size(1)/2;  % BZ-DZ中心間距離。ゾーン境界を隣接させる
 
 itv_mic = [0.04, 0.08];  % 制御点の間隔 [x, y] [m]
-itv_sp = 0.085;  % スピーカー間隔 [m]
+itv_sp = 0.05;  % スピーカー間隔 [m]
 
 geometry_mode = "zones";  % "zones" / "referenceL"
 if strcmp(geometry_mode, "referenceL")

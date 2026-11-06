@@ -1,7 +1,9 @@
-function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau, floor_dB, dz_mode, reverse_gz,reg_rel)
+function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau, floor_dB, dz_mode, reverse_gz, reg_rel)
     % floor_dB: GZ終端（floorモードではDZも）の目標 [dB]
     % dz_mode: "zero"（DZ目標=0）/ "floor"（DZ目標=GZ終端と同じ値）
     % reverse_gz: true でGZの遷移方向を反転（BZが右側の二重音声の音B）
+    % reg_rel: 正則化の強さ（G'G の最大固有値に対する比）。既定 1e-7
+    % 時間規約は e^{+iωt}。+y方向に進む平面波は e^{-ik(...)}、遅延は e^{-iωτ}
 
     if nargin < 10 || isempty(tau), tau = 0; end
     if nargin < 11 || isempty(floor_dB), floor_dB = -20.0; end
@@ -45,7 +47,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         g = G(:,:,kk);
         delay_phase = exp(-1i * 2*pi*f(kk) * tau);
 
-        % 正則化: λ = 1e-7 × (G'G の最大固有値)
+        % 正則化: λ = reg_rel × (G'G の最大固有値)
         gg = g' * g;
         gg = (gg + gg') / 2;
         reg_para = reg_rel * max(real(eig(gg)));
@@ -56,7 +58,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         for i = 1:num_bz
             x_m = mic_geo(i,1);
             y_m = mic_geo(i,2);
-            p_des(i) = amp_src * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave))) * delay_phase;
+            p_des(i) = amp_src * exp(-1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave))) * delay_phase;
             w_vec(i) = 1.0;
         end
 
@@ -82,7 +84,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
                 s = 3*t.^2 - 2*t.^3;  % 両端で傾き0
 
                 amp_g = amp_src * 10^(floor_dB * s / 20);
-                p_des(i) = amp_g * exp(1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave))) * delay_phase;
+                p_des(i) = amp_g * exp(-1i * (2*pi*f(kk)/c) * (x_m*cos(ang_wave) + y_m*sin(ang_wave))) * delay_phase;
 
                 log_w = s * log10(100.0);  % 重み 1 → 100
                 w_vec(i) = 10^(log_w);
@@ -95,7 +97,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
                 x_m = mic_geo(i,1);
                 y_m = mic_geo(i,2);
                 amp_d = amp_src * 10^(floor_dB / 20);
-                p_des(i) = amp_d * exp(1i * (2*pi*f(kk)/c) * ...
+                p_des(i) = amp_d * exp(-1i * (2*pi*f(kk)/c) * ...
                     (x_m*cos(ang_wave) + y_m*sin(ang_wave))) * delay_phase;
             else
                 p_des(i) = 0;

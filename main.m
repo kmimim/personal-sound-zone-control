@@ -22,8 +22,8 @@ pltSPL = true;  % 音圧マップ・折れ線グラフ
 
 dual_mode  = true;  % true: 二重音声 / false: 音Aのみ
 listen_pts = [];  % [x, y] を行ごとに。空なら左BZ・GZ・右BZの中心
-rawA_path  = "F01.raw";  % 音声A(.raw)のパス
-rawB_path  = "F02.raw";  % 音声B(.raw)のパス（dual_mode=true のとき使用）
+rawA_path  = "M02.raw";  % 音声A(.raw)のパス
+rawB_path  = "M03.raw";  % 音声B(.raw)のパス（dual_mode=true のとき使用）
 n_channels = 1;  % RAWのチャンネル数
 
 export_raw = true;  % true: 実機用に各スピーカーのraw（fs_out）を出力（make_speaker_raw.m）

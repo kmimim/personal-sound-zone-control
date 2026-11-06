@@ -1,4 +1,4 @@
-function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau, floor_dB, dz_mode, reverse_gz)
+function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, num_gz, tau, floor_dB, dz_mode, reverse_gz,reg_rel)
     % floor_dB: GZ終端（floorモードではDZも）の目標 [dB]
     % dz_mode: "zero"（DZ目標=0）/ "floor"（DZ目標=GZ終端と同じ値）
     % reverse_gz: true でGZの遷移方向を反転（BZが右側の二重音声の音B）
@@ -7,6 +7,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
     if nargin < 11 || isempty(floor_dB), floor_dB = -20.0; end
     if nargin < 12 || isempty(dz_mode), dz_mode = "zero"; end
     if nargin < 13 || isempty(reverse_gz), reverse_gz = false; end
+    if nargin < 14 || isempty(reg_rel), reg_rel = 1e-7; end
     if ~isscalar(floor_dB) || ~isfinite(floor_dB) || floor_dB > 0
         error('filter_pm:invalidFloorDb', ...
             'floor_dBには0以下の有限なスカラー値を指定してください。');
@@ -47,7 +48,7 @@ function drv_ls = filter_pm(mic_geo, G, f, ang_wave, amp_src, Nsrc, c, num_bz, n
         % 正則化: λ = 1e-7 × (G'G の最大固有値)
         gg = g' * g;
         gg = (gg + gg') / 2;
-        reg_para = 10^(-7) * max(real(eig(gg)));
+        reg_para = reg_rel * max(real(eig(gg)));
 
         p_des = zeros(n_mic, Nsrc);
         w_vec = ones(n_mic, 1);  % 重みベクトルの初期化

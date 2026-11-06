@@ -22,9 +22,13 @@ pltSPL = true;  % 音圧マップ・折れ線グラフ
 
 dual_mode  = true;  % true: 二重音声 / false: 音Aのみ
 listen_pts = [];  % [x, y] を行ごとに。空なら左BZ・GZ・右BZの中心
-rawA_path  = "";  % 音声A(.raw)のパス
-rawB_path  = "";  % 音声B(.raw)のパス（dual_mode=true のとき使用）
+rawA_path  = "F01.raw";  % 音声A(.raw)のパス
+rawB_path  = "F02.raw";  % 音声B(.raw)のパス（dual_mode=true のとき使用）
 n_channels = 1;  % RAWのチャンネル数
+
+export_raw = true;  % true: 実機用に各スピーカーのraw（fs_out）を出力（make_speaker_raw.m）
+fs_out     = 48000;  % 実機用rawのサンプリング周波数 [Hz]
+out_dir    = "speaker_raw";  % 実機用rawの出力先
 
 %% ゾーンとスピーカーの配置
 room_size = [-1.5, 1.5, 0, 3.0];
@@ -284,4 +288,9 @@ for ip = 1:n_listen
         tag, dz_mode, floor_dB, x_target, y_target);
     audiowrite(out_wav_path, y_w, fs_audio);
     fprintf("聴取点 (x=%.3f, y=%.3f) の音声を '%s' として保存しました。\n", x_target, y_target, out_wav_path);
+end
+
+%% 実機用: 各スピーカーのraw出力
+if export_raw
+    run make_speaker_raw.m
 end

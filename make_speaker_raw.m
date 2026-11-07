@@ -6,6 +6,10 @@ if ~use_dual
 end
 raw_peak    = 0.9;    % 全スピーカー・全サンプルの最大値（条件ごと）
 match_level = true;   % true: 音Aと音Bの、それぞれのBZ中心でのRMSをそろえる
+plot_cond   = true;   % true: 条件ごとの制御点マップ・音圧マップ・折れ線グラフを out_dir/figs に保存（plot_conditions.m）
+plot_show   = false;  % true: 図を画面にも表示する（false: ファイル保存のみ）
+itv_map     = 0.04;   % 音圧マップの格子間隔 [m]（小さいほど細かいが遅い）
+map_clim    = [-30 15]; % 音圧マップのカラーバーの範囲 [dB]（spl_distribution.m と同じ。深い抑圧を見るなら [-50 5] など）
 
 % 条件: {名前, 種類, floor_dB}
 rw_conds = {"nocontrol",   "front", 0;
@@ -28,10 +32,11 @@ rw_Gline = IR_freefield([rw_xl, zone_h * ones(numel(rw_xl), 1)], pos_sp, k_list)
 rw_pts = [rw_refA(1), 0, rw_refB(1)];
 
 rw_drvA = cell(rw_n, 1);  rw_drvB = cell(rw_n, 1);
+rw_ctrlA = cell(rw_n, 1); rw_ctrlB = cell(rw_n, 1);
 fprintf("\n予測値（自由空間、BZ平均エネルギーを0 dBとした広帯域レベル）\n");
 fprintf("%-15s | 台数 | AC[dB] | 音A: 左BZ中心 / 中央 / 右ゾーン中心 [dB] | 音B: 左 / 中央 / 右BZ中心 [dB] | GZ内の最大傾き[dB/m] | BZ内の波打ち[dB] | 最大|drv|\n", "条件");
 for q = 1:rw_n
-    [rw_drvA{q}, rw_drvB{q}] = design_drive(rw_conds{q,2}, rw_conds{q,3}, pos_sp, pos_mic, num_bz, num_gz, G_ctrl, ...
+    [rw_drvA{q}, rw_drvB{q}, rw_ctrlA{q}, rw_ctrlB{q}] = design_drive(rw_conds{q,2}, rw_conds{q,3}, pos_sp, pos_mic, num_bz, num_gz, G_ctrl, ...
         freq_list, ang_wave, amp_src, Nsrc, c, tau_model, rw_xrA, rw_xrB);
     pA = zeros(num_mic, f_len);  pB = pA;  pLA = zeros(numel(rw_xl), f_len);  pLB = pLA;
     for n = 1:f_len
@@ -109,3 +114,8 @@ for q = 1:rw_n
     fprintf("C%d_%s: 32ファイルを %s に出力（最大値 %.3f、BZ中心の音量をそろえる再生ゲイン %.1f dB）\n", q, rw_conds{q,1}, rw_d, max(abs(rw_Sq(:))), rw_rel_gain_dB(q));
 end
 fclose(rw_fid);
+
+% 条件ごとの制御点マップ・音圧マップ・折れ線グラフ
+if plot_cond
+    run plot_conditions.m
+end

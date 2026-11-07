@@ -1,0 +1,2 @@
+timestamp,num_sp,bz_w,gz_w,dz_w,zone_h,dist_zone,AC_total,slope_gz_max_dB_per_m,slope_gz_mean_dB_per_m,kink_bz_gz_dB_per_m,kink_gz_dz_dB_per_m,bz_ripple_pp_dB,dz_ripple_pp_dB,floor_dB,dz_mode,dual
+2026-11-07 23:55:43,32,0.400,0.750,0.400,1.000,1.150,20.116,38.770,26.131,5.374,5.073,0.250,0.181,-20,floor,1

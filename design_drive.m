@@ -1,8 +1,10 @@
-function [drvA, drvB] = design_drive(type, floor_dB, pos_sp, pos_mic, num_bz, num_gz, G, f, ang_wave, amp_src, Nsrc, c, tau, xr_A, xr_B)
+function [drvA, drvB, ctrlA, ctrlB] = design_drive(type, floor_dB, pos_sp, pos_mic, num_bz, num_gz, G, f, ang_wave, amp_src, Nsrc, c, tau, xr_A, xr_B)
     % 条件ごとの各スピーカーの駆動信号（周波数領域）。drvA: 音A（BZ=左）、drvB: 音B（BZ=右）
     %   type "gz"   : グラデーションゾーンあり（floor_dB、DZ目標=GZ終端）
     %   type "nogz" : グラデーションゾーンなしの従来手法。暗い側の制御点はL字配置（目標0）＋DZ内部の間引き点
     %   type "front": 制御なし。ゾーン前(xr_A, xr_B のx範囲)のスピーカーだけが、同じゲインで鳴る
+    % ctrlA, ctrlB（省略可）: 図の作成用に、使った制御点を返す構造体。
+    %   bz, gz, dz: ゾーンの制御点 / L, dzin, fill: nogzの暗い側の制御点 / on: 鳴らすスピーカー（frontのみ）
 
     % 正則化の強さ（G'G の最大固有値に対する比）。従来は 1e-7。
     % 小さすぎると超指向性の駆動になり、スピーカーの個体差やFIRの周波数刻みの間でキャンセルが崩れる。
@@ -13,6 +15,10 @@ function [drvA, drvB] = design_drive(type, floor_dB, pos_sp, pos_mic, num_bz, nu
     idx_gz = num_bz+1 : num_bz+num_gz;
     idx_dz = num_bz+num_gz+1 : n_mic;
 
+    e2 = zeros(0, 2);
+    ctrlA = struct('bz', e2, 'gz', e2, 'dz', e2, 'L', e2, 'dzin', e2, 'fill', e2, 'on', false(size(pos_sp, 1), 1));
+    ctrlB = ctrlA;
+
     switch type
         case "gz"
             drvA = filter_pm(pos_mic, G, f, ang_wave, amp_src, Nsrc, c, ...
@@ -20,6 +26,8 @@ function [drvA, drvB] = design_drive(type, floor_dB, pos_sp, pos_mic, num_bz, nu
             idx_B = [idx_dz, idx_gz, idx_bz];
             drvB = filter_pm(pos_mic(idx_B,:), G(idx_B,:,:), f, ang_wave, amp_src, Nsrc, c, ...
                 numel(idx_dz), num_gz, tau, floor_dB, "floor", true, reg_rel);
+            ctrlA.bz = pos_mic(idx_bz,:);  ctrlA.gz = pos_mic(idx_gz,:);  ctrlA.dz = pos_mic(idx_dz,:);
+            ctrlB.bz = pos_mic(idx_dz,:);  ctrlB.gz = pos_mic(idx_gz,:);  ctrlB.dz = pos_mic(idx_bz,:);
 
         case "nogz"
             % 暗い側の制御点: L字（目標0）＋DZ内部の間引き点。音Aは右側、音Bはその左右反転。
@@ -57,6 +65,8 @@ function [drvA, drvB] = design_drive(type, floor_dB, pos_sp, pos_mic, num_bz, nu
             mic_B = [pos_mic(idx_dz,:); pos_LB; dz_inB; pos_fillB];
             drvB = filter_pm(mic_B, IR_freefield(mic_B, pos_sp, k), f, ang_wave, amp_src, Nsrc, c, ...
                 numel(idx_dz), 0, tau, -20, "zero", false, reg_rel);
+            ctrlA.bz = pos_mic(idx_bz,:);  ctrlA.L = pos_L;   ctrlA.dzin = dz_in;   ctrlA.fill = pos_fill;
+            ctrlB.bz = pos_mic(idx_dz,:);  ctrlB.L = pos_LB;  ctrlB.dzin = dz_inB;  ctrlB.fill = pos_fillB;
 
         case "front"
             delay = exp(-1i * 2*pi*f(:).' * tau);
@@ -65,6 +75,8 @@ function [drvA, drvB] = design_drive(type, floor_dB, pos_sp, pos_mic, num_bz, nu
             on_B = pos_sp(:,1) >= xr_B(1) - tol & pos_sp(:,1) <= xr_B(2) + tol;
             drvA = double(on_A) * delay;
             drvB = double(on_B) * delay;
+            ctrlA.on = on_A;
+            ctrlB.on = on_B;
 
         otherwise
             error('design_drive:invalidType', 'typeは"gz" / "nogz" / "front" のいずれかです。');

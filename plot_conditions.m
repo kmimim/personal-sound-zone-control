@@ -37,7 +37,7 @@ pc_conL = [pc_bzx(1)+pc_off, pc_zy(1)+pc_off; pc_bzx(1)+pc_off, pc_zy(2)-pc_off;
            pc_bzx(2)-pc_off, pc_zy(1)+pc_off; pc_bzx(1)+pc_off, pc_zy(1)+pc_off];   % 左のゾーン
 pc_conR = [pc_dzx(1)+pc_off, pc_zy(1)+pc_off; pc_dzx(1)+pc_off, pc_zy(2)-pc_off; pc_dzx(2)-pc_off, pc_zy(2)-pc_off; ...
            pc_dzx(2)-pc_off, pc_zy(1)+pc_off; pc_dzx(1)+pc_off, pc_zy(1)+pc_off];   % 右のゾーン
-pc_sound = {'Sound A (bright: left zone)', 'Sound B (bright: right zone)'};
+pc_sound = {'Sound A (Bright:L)', 'Sound B (Bright:R)'};
 
 % カラーマップ（spl_distribution.m と同じ: 黒 → 紫 → 赤 → 黄）
 pc_n = 256;  pc_c1 = round(pc_n/3);  pc_c2 = round(pc_n*2/3);
@@ -109,20 +109,20 @@ for q = 1:rw_n
         if any(c_.on)
             if any(~c_.on)
                 h(end+1) = scatter(pos_sp(~c_.on,1), pos_sp(~c_.on,2), 30, [0.6 0.6 0.6], '^');
-                lab{end+1} = 'Speaker (silent)';
+                lab{end+1} = 'spk (Off)';
             end
             h(end+1) = scatter(pos_sp(c_.on,1), pos_sp(c_.on,2), 40, [0.85 0.1 0.1], '^', 'filled');
-            lab{end+1} = sprintf('Speaker (active: %d)', nnz(c_.on));
+            lab{end+1} = sprintf('Spk (On: %d)', nnz(c_.on));
         else
             h(end+1) = scatter(pos_sp(:,1), pos_sp(:,2), 30, [0 0 0], '^', 'filled');
-            lab{end+1} = 'Speaker';
+            lab{end+1} = 'spk';
         end
-        pc_layers = {c_.bz,   'Bright zone points',      [0.25 0.60 0.75], 16;
-                     c_.gz,   'Gradation zone points',   [0.20 0.60 0.35], 12;
-                     c_.dz,   'Dark zone points',        [0.45 0.45 0.45], 12;
-                     c_.L,    'Dark: L-line points',     [0.80 0.00 0.00], 12;
-                     c_.dzin, 'Dark: DZ interior points',[0.90 0.55 0.15], 14;
-                     c_.fill, 'Dark: gap-fill points',   [0.60 0.20 0.70], 14};
+        pc_layers = {c_.bz,   'Bz pts',      [0.25 0.60 0.75], 16;
+                     c_.gz,   'Gz pts',   [0.20 0.60 0.35], 12;
+                     c_.dz,   'Dz pts',        [0.45 0.45 0.45], 12;
+                     c_.L,    'Dz: L-line',     [0.80 0.00 0.00], 12;
+                     c_.dzin, 'Dz: in',[0.90 0.55 0.15], 14;
+                     c_.fill, 'Dz: fill',   [0.60 0.20 0.70], 14};
         for L_ = 1:size(pc_layers, 1)
             P_ = pc_layers{L_, 1};
             if ~isempty(P_)
@@ -133,7 +133,7 @@ for q = 1:rw_n
         daspect([1 1 1]);  xlim(room_size(1:2));  ylim(room_size(3:4));  grid on;  box on;
         xlabel('x [m]');  ylabel('y [m]');
         title(sprintf('%s: %s', ttl, pc_sound{s}));
-        lg = legend(h, lab(1:numel(h)), 'Location', 'northeast');  set(lg, 'FontSize', 7);
+        lg = legend(h, lab(1:numel(h)), 'Location', 'eastoutside' ,  'FontSize', 7); 
     end
     saveas(fig, fullfile(pc_dir, [pc_names{q} '_control_points.png']), 'png');  close(fig);
 
@@ -172,18 +172,18 @@ for q = 1:rw_n
     % --- (3) 折れ線グラフ（y = zone_h。plot_spl_profile.m と同じ体裁）
     fig = figure('Visible', pc_vis, 'Position', [100, 100, 1000, 460]);
     y_lo = min([pc_LA(:,q); pc_LB(:,q)]) - 5;  y_hi = max([pc_LA(:,q); pc_LB(:,q)]) + 5;
-    patch([pc_bzx(1) pc_gzx(1) pc_gzx(1) pc_bzx(1)], [y_lo y_lo y_hi y_hi], 'c', 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'DisplayName', 'Left zone (Sound A bright)');
+    patch([pc_bzx(1) pc_gzx(1) pc_gzx(1) pc_bzx(1)], [y_lo y_lo y_hi y_hi], 'c', 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'DisplayName', 'Bz');
     hold on;
     if num_gz > 0
-        patch([pc_gzx(1) pc_gzx(2) pc_gzx(2) pc_gzx(1)], [y_lo y_lo y_hi y_hi], 'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Gradation Zone');
+        patch([pc_gzx(1) pc_gzx(2) pc_gzx(2) pc_gzx(1)], [y_lo y_lo y_hi y_hi], 'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Gz');
     end
-    patch([pc_gzx(2) pc_dzx(2) pc_dzx(2) pc_gzx(2)], [y_lo y_lo y_hi y_hi], 'k', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Right zone (Sound B bright)');
+    patch([pc_gzx(2) pc_dzx(2) pc_dzx(2) pc_gzx(2)], [y_lo y_lo y_hi y_hi], 'k', 'FaceAlpha', 0.1, 'EdgeColor', 'none', 'DisplayName', 'Dz');
     plot(pc_xl, pc_LA(:,q), '-', 'Color', [0, 0, 0.5], 'LineWidth', 1.5, 'DisplayName', sprintf('Sound A (y = %.2f m)', zone_h));
     plot(pc_xl, pc_LB(:,q), '-', 'Color', [0.85, 0.33, 0.10], 'LineWidth', 1.5, 'DisplayName', sprintf('Sound B (y = %.2f m)', zone_h));
-    xlabel('x [m]');  ylabel('Relative broadband level [dB re mean BZ energy]');
-    title(sprintf('%s: x-direction relative level at y = %.2f m', ttl, zone_h));
+    xlabel('x [m]');  ylabel('Rel. Level [dB]');
+    title(sprintf('%s: x-profile at y=%.2fm', ttl, zone_h));
     xlim(room_size(1:2));  ylim([y_lo, y_hi]);  grid on;
-    legend('Location', 'best');
+    legend('Location', 'eastoutside','FontSize', 8); 
     drawnow;
     saveas(fig, fullfile(pc_dir, [pc_names{q} '_profile.png']), 'png');  close(fig);
 end
@@ -198,9 +198,9 @@ for s = 1:2
         plot(pc_xl, Lc(:,q), 'Color', pc_col(mod(q-1, 4)+1, :), 'LineWidth', 1.4);
     end
     xlim(room_size(1:2));  grid on;  box on;
-    xlabel('x [m]');  ylabel('Relative broadband level [dB re mean BZ energy]');
+    xlabel('x [m]');  ylabel('Rel. Level [dB]');
     title(sprintf('%s (y = %.2f m)', pc_sound{s}, zone_h));
-    legend(strrep(pc_names, '_', ' '), 'Location', 'south');
+    legend(strrep(pc_names, '_', ' '), 'Location', 'southoutside', 'NumColumns', 2);
 end
 saveas(fig, fullfile(pc_dir, 'profile_compare.png'), 'png');  close(fig);
 

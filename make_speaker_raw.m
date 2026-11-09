@@ -11,12 +11,16 @@ plot_show   = false;  % true: 図を画面にも表示する（false: ファイ�
 itv_map     = 0.04;   % 音圧マップの格子間隔 [m]（小さいほど細かいが遅い）
 map_clim    = [-30 15]; % 音圧マップのカラーバーの範囲 [dB]（spl_distribution.m と同じ。深い抑圧を見るなら [-50 5] など）
 
-% 条件: {名前, 種類, floor_dB}
+% 条件: {名前, 種類, floor_dB}（行の順に C1, C2, ... の番号になる）
 rw_conds = {"nocontrol",   "front", 0;
-            "conventional","nogz",  0;
+            "conventional","nogz",  0;      % C2: GZなしの従来手法（BZとDZが x=0 で接する）
+            "conventional_withGZ", "nogz_gz", 0;   % C3: GZあり（GZ領域は制御しない）の従来手法
             "gz_fl-20",    "gz",   -20;
             "gz_fl-30",    "gz",   -30};
 rw_n = size(rw_conds, 1);
+fprintf("\n条件（%d種類）:", rw_n);
+for q = 1:rw_n, fprintf("  C%d_%s", q, char(rw_conds{q,1})); end
+fprintf("\n");
 
 rw_df = fs_audio / L_fir;                  % 設計周波数の刻み [Hz]（main.m と同じ）
 rw_L  = round(fs_out / rw_df);             % 出力側のFIR長
@@ -24,12 +28,9 @@ rw_idx_bz = 1:num_bz;
 rw_idx_dz = num_bz+num_gz+1 : num_mic;
 rw_xrA = -dist_zone/2 + [-1, 1] * bz_size(1)/2;
 rw_xrB =  dist_zone/2 + [-1, 1] * dz_size(1)/2;
-rw_refA = mean(pos_mic(rw_idx_bz, :), 1);  % 音量の基準点（音Aの明るい側の中心）
-rw_refB = mean(pos_mic(rw_idx_dz, :), 1);  % 音量の基準点（音Bの明るい側の中心）
-rw_Gref = IR_freefield([rw_refA; rw_refB], pos_sp, k_list);
 rw_xl = (room_size(1):itv_room:room_size(2))';
 rw_Gline = IR_freefield([rw_xl, zone_h * ones(numel(rw_xl), 1)], pos_sp, k_list);
-rw_pts = [rw_refA(1), 0, rw_refB(1)];
+rw_bzA_q = cell(rw_n, 1);  rw_bzB_q = cell(rw_n, 1);   % 条件ごとのBZ制御点（音A・音B）。C2はGZなしの専用ゾーン
 
 rw_drvA = cell(rw_n, 1);  rw_drvB = cell(rw_n, 1);
 rw_ctrlA = cell(rw_n, 1); rw_ctrlB = cell(rw_n, 1);
@@ -38,19 +39,34 @@ fprintf("%-15s | 台数 | AC[dB] | 音A: 左BZ中心 / 中央 / 右ゾーン中�
 for q = 1:rw_n
     [rw_drvA{q}, rw_drvB{q}, rw_ctrlA{q}, rw_ctrlB{q}] = design_drive(rw_conds{q,2}, rw_conds{q,3}, pos_sp, pos_mic, num_bz, num_gz, G_ctrl, ...
         freq_list, ang_wave, amp_src, Nsrc, c, tau_model, rw_xrA, rw_xrB);
-    pA = zeros(num_mic, f_len);  pB = pA;  pLA = zeros(numel(rw_xl), f_len);  pLB = pLA;
+    % 条件ごとのBZ制御点（design_drive が返す。返さない条件(front)は main.m のゾーン）
+    rw_bzA = rw_ctrlA{q}.bz;  if isempty(rw_bzA), rw_bzA = pos_mic(rw_idx_bz, :); end
+    rw_bzB = rw_ctrlB{q}.bz;  if isempty(rw_bzB), rw_bzB = pos_mic(rw_idx_dz, :); end
+    rw_bzA_q{q} = rw_bzA;  rw_bzB_q{q} = rw_bzB;
+    rw_G1 = IR_freefield(rw_bzA, pos_sp, k_list);   % 音Aの明るい側
+    rw_G2 = IR_freefield(rw_bzB, pos_sp, k_list);   % 音Bの明るい側（= 音Aの暗い側）
+    pbA = zeros(size(rw_bzA,1), f_len);  pdA = zeros(size(rw_bzB,1), f_len);  pbB = pdA;
+    pLA = zeros(numel(rw_xl), f_len);  pLB = pLA;
     for n = 1:f_len
-        pA(:,n) = G_ctrl(:,:,n) * rw_drvA{q}(:,n);  pB(:,n) = G_ctrl(:,:,n) * rw_drvB{q}(:,n);
+        pbA(:,n) = rw_G1(:,:,n) * rw_drvA{q}(:,n);
+        pdA(:,n) = rw_G2(:,:,n) * rw_drvA{q}(:,n);
+        pbB(:,n) = rw_G2(:,:,n) * rw_drvB{q}(:,n);
         pLA(:,n) = rw_Gline(:,:,n) * rw_drvA{q}(:,n);  pLB(:,n) = rw_Gline(:,:,n) * rw_drvB{q}(:,n);
     end
-    rw_pb = pA(rw_idx_bz,:);  rw_pd = pA(rw_idx_dz,:);
-    rw_AC = 10*log10(mean(abs(rw_pb(:)).^2) / mean(abs(rw_pd(:)).^2));
-    rw_LA = 10*log10(sum(abs(pLA).^2, 2) / mean(sum(abs(pA(rw_idx_bz,:)).^2, 2)));
-    rw_LB = 10*log10(sum(abs(pLB).^2, 2) / mean(sum(abs(pB(rw_idx_dz,:)).^2, 2)));
-    rw_ingz = rw_xl >= -gz_size(1)/2 & rw_xl <= gz_size(1)/2;
-    rw_slope = max(abs(diff(rw_LA(rw_ingz)))) / itv_room;
-    rw_inbz = rw_xl >= rw_xrA(1) + 0.05 & rw_xl <= rw_xrA(2) - 0.05;
+    rw_AC = 10*log10(mean(abs(pbA(:)).^2) / mean(abs(pdA(:)).^2));
+    rw_LA = 10*log10(sum(abs(pLA).^2, 2) / mean(sum(abs(pbA).^2, 2)));
+    rw_LB = 10*log10(sum(abs(pLB).^2, 2) / mean(sum(abs(pbB).^2, 2)));
+    if isempty(rw_ctrlA{q}.zone_bz)
+        rw_zbz = rw_xrA;                                  % main.m のゾーン（GZあり）
+        rw_ingz = rw_xl >= -gz_size(1)/2 & rw_xl <= gz_size(1)/2;
+        rw_slope = max(abs(diff(rw_LA(rw_ingz)))) / itv_room;
+    else
+        rw_zbz = [min(rw_bzA(:,1)), max(rw_bzA(:,1))];    % この条件専用のゾーン（GZなし）
+        rw_slope = NaN;
+    end
+    rw_inbz = rw_xl >= rw_zbz(1) + 0.05 & rw_xl <= rw_zbz(2) - 0.05;
     rw_rip = max(rw_LA(rw_inbz)) - min(rw_LA(rw_inbz));
+    rw_pts = [mean(rw_bzA(:,1)), 0, mean(rw_bzB(:,1))];
     rw_used = nnz(any(abs(rw_drvA{q}) > 0, 2) | any(abs(rw_drvB{q}) > 0, 2));
     fprintf("%-15s | %3d  | %6.2f | %7.2f / %7.2f / %7.2f | %7.2f / %7.2f / %7.2f | %9.1f | %8.2f | %7.1f\n", ...
         sprintf("C%d_%s", q, rw_conds{q,1}), rw_used, rw_AC, interp1(rw_xl, rw_LA, rw_pts), interp1(rw_xl, rw_LB, rw_pts), ...
@@ -68,6 +84,7 @@ rw_rms = @(v) sqrt(mean(v.^2));
 fprintf("\nBZ中心での主役音のRMS（予測）\n%-15s | 整合前: A / B / B-A [dB] | 整合後: B-A [dB]\n", "条件");
 rw_S = cell(rw_n, 1);  rw_peak = zeros(rw_n, 1);  rw_rmsA = zeros(rw_n, 1);  rw_gB = ones(rw_n, 1);
 for q = 1:rw_n
+    rw_Gref = IR_freefield([mean(rw_bzA_q{q}, 1); mean(rw_bzB_q{q}, 1)], pos_sp, k_list);   % 音量の基準点（各音のBZ中心）
     rw_HrA = zeros(1, f_len);  rw_HrB = zeros(1, f_len);
     for n = 1:f_len
         rw_HrA(n) = rw_Gref(1,:,n) * rw_drvA{q}(:,n);

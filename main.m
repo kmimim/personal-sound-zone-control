@@ -10,7 +10,7 @@ tau_model = 0.008;  % 因果化の遅延 [s]
 floor_dB = -20.0;  % GZ終端（floorモードではDZも）の目標 [dB]
 dz_mode = "floor";  % "zero": DZ目標=0 / "floor": DZ目標=GZ終端と同じ値
 f_low     = 500;
-f_high    = 2000;
+f_high    = 3400;
 bin_idx   = ceil(f_low*L_fir/fs_audio - 1e-9) : floor(f_high*L_fir/fs_audio + 1e-9);
 freq_list = bin_idx * fs_audio / L_fir;
 c = 340;  % 音速 [m/s]
@@ -22,8 +22,8 @@ pltSPL = true;  % 音圧マップ・折れ線グラフ
 
 dual_mode  = true;  % true: 二重音声 / false: 音Aのみ
 listen_pts = [];  % [x, y] を行ごとに。空なら左BZ・GZ・右BZの中心
-rawA_path  = "M02.raw";  % 音声A(.raw)のパス
-rawB_path  = "M03.raw";  % 音声B(.raw)のパス（dual_mode=true のとき使用）
+rawA_path  = "F02.raw";  % 音声A(.raw)のパス
+rawB_path  = "M02.raw";  % 音声B(.raw)のパス（dual_mode=true のとき使用）
 n_channels = 1;  % RAWのチャンネル数
 
 export_raw = true;  % true: 実機用に各スピーカーのraw（fs_out）を出力（make_speaker_raw.m）

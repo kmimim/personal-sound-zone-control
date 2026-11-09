@@ -1,3 +1,4 @@
+if ~exist('profile_ylim', 'var'), profile_ylim = [-60 10]; end   % 折れ線グラフのy軸の範囲 [dB]（main.m で指定）
 %% 指定したy座標(1ライン)のx方向音圧プロファイルの描画
 y_target_line = zone_h;
 
@@ -38,6 +39,7 @@ else
     y_min_plot = min(spl_profile) - 5;
     y_max_plot = max(spl_profile) + 5;
 end
+y_min_plot = profile_ylim(1);  y_max_plot = profile_ylim(2);   % y軸の範囲は固定（main.m の profile_ylim）
 if plot_dual
     name_bz = 'Left zone (Sound A bright)';
     name_dz = 'Right zone (Sound B bright)';

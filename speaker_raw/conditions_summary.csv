@@ -1,5 +1,0 @@
-condition,type,floor_dB,digital_gain,level_match_gain_B,max_abs,samples,fs_out,relative_playback_gain_dB_to_equalize_BZ_level
-C1_nocontrol,front,0,2.59842,1.60941,0.9000,387071,48000,-13.07
-C2_conventional,nogz,0,2.51562,1.86865,0.9000,387071,48000,0.00
-C3_gz_fl-20,gz,-20,1.23372,1.65917,0.9000,387071,48000,-10.60
-C4_gz_fl-30,gz,-30,1.22194,1.6586,0.9000,387071,48000,-10.53

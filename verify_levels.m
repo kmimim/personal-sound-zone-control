@@ -2,7 +2,7 @@
 clear; clc;
 in_dir = "speaker_raw";  fs_out = 48000;  c = 340;
 num_sp = 32;  itv_sp = 0.05;  zone_h = 1.0;  ref_x = 0.575;           % BZ中心のx [m]（左: -ref_x、右: +ref_x）
-names = {"C1_nocontrol", "C2_conventional", "C3_gz_fl-20", "C4_gz_fl-30"};
+names = {"C1_nocontrol", "C2_conventional", "C3_conventional_withGZ", "C4_gz_fl-20", "C5_gz_fl-30"};   % make_speaker_raw.m の rw_conds の順
 pos_sp = [((0:num_sp-1)' - (num_sp-1)/2) * itv_sp, zeros(num_sp, 1)];   % 左から1〜32
 ref = [-ref_x, zone_h; ref_x, zone_h];
 fprintf("%-16s | 左BZ中心のRMS | 右BZ中心のRMS | 右-左 [dB]\n", "条件");
